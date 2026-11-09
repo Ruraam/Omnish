@@ -1,5 +1,3 @@
-# omnish
-
 <p align="center">
   <img src="assets/omnish-banner.svg" alt="omnish — modular file manager & system console" width="100%">
 </p>
