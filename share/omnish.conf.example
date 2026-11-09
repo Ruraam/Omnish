@@ -1,0 +1,18 @@
+# omnish configuration
+# Copy to $XDG_CONFIG_HOME/omnish/omnish.conf to activate.
+
+# General
+#OMNI_CD_ON_EXIT=1
+#OMNI_USE_TRASH=1
+
+# Opener
+#OMNI_OPENER="xdg-open"
+
+# Trash location
+#OMNI_TRASH="${XDG_DATA_HOME:-$HOME/.local/share}/omnish/trash"
+
+# Preview margin (chars from right edge)
+#MARGIN_PREVIEW=60
+
+# Terminal name (auto-detected if unset)
+#MY_TERMINAL="kitty"
