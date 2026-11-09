@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+# omnish v3.0 — modular file manager for BubbleOS
+# License: GPLv3
+#
+# Backend selection:
+#   OMNISH_BACKEND=fzf   → use lib/70-fzf.sh (requires fzf)
+#   OMNISH_BACKEND=loop  → use lib/70-loop.sh (pure bash, no fzf)
+#   OMNISH_BACKEND=auto  → fzf if available, else loop (default)
+
+trap "" SIGTSTP
+
+SELF="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}")"
+OMNISH_ROOT="${SELF%/*}"
+OMNISH_VERSION="3.0.0"
+OMNISH_ENTRYPOINT="$SELF"
+export OMNISH_ROOT OMNISH_VERSION OMNISH_ENTRYPOINT
+OMNISH_LIB="$OMNISH_ROOT/lib"
+
+if [[ ! -d "$OMNISH_LIB" ]]; then
+    echo "fatal: lib dir not found at $OMNISH_LIB" >&2
+    exit 1
+fi
+
+# --- Optional: vendored script-dialog ---
+if [[ -r "$OMNISH_ROOT/vendor/script-dialog/script-dialog.sh" ]]; then
+    export OMNISH_HAS_SCRIPT_DIALOG=1
+else
+    export OMNISH_HAS_SCRIPT_DIALOG=0
+    [[ -n "${OMNISH_DEBUG:-}" ]] && \
+        printf 'omnish: script-dialog not vendored; using bash fallbacks\n' >&2
+fi
+
+# --- Backend resolution ---
+OMNISH_BACKEND="${OMNISH_BACKEND:-auto}"
+
+if [[ "$OMNISH_BACKEND" == "auto" ]]; then
+    if command -v fzf >/dev/null 2>&1; then
+        OMNISH_BACKEND="fzf"
+    else
+        OMNISH_BACKEND="loop"
+    fi
+fi
+
+case "$OMNISH_BACKEND" in
+    fzf)
+        [[ -r "$OMNISH_LIB/70-fzf.sh" ]] || {
+            echo "fatal: OMNISH_BACKEND=fzf but $OMNISH_LIB/70-fzf.sh is missing" >&2
+            exit 1
+        }
+        ;;
+    loop)
+        [[ -r "$OMNISH_LIB/70-loop.sh" ]] || {
+            echo "fatal: OMNISH_BACKEND=loop but $OMNISH_LIB/70-loop.sh is missing" >&2
+            exit 1
+        }
+        ;;
+    *)
+        echo "fatal: unknown OMNISH_BACKEND='$OMNISH_BACKEND' (expected: fzf|loop|auto)" >&2
+        exit 1
+        ;;
+esac
+
+# --- Load common modules ---
+for mod in "$OMNISH_LIB"/[0-9][0-9]-*.sh; do
+    [[ -r "$mod" ]] || continue
+    base="${mod##*/}"
+    [[ "$base" == "70-fzf.sh"  ]] && continue
+    [[ "$base" == "70-loop.sh" ]] && continue
+    # shellcheck disable=SC1090
+    source "$mod"
+done
+
+# --- Load selected backend ---
+# shellcheck disable=SC1090
+source "$OMNISH_LIB/70-${OMNISH_BACKEND}.sh"
+
+# --- Fallback: safe_ls if backend doesn't provide it ---
+if ! declare -F safe_ls >/dev/null 2>&1; then
+    safe_ls() {
+        local dir="${1:-$PWD}"
+        local -a opts=(--group-directories-first --color=always)
+        [[ -f "$CACHE_OMNISH_DIR/showhidden" ]] && opts+=(-a)
+        printf '\033[1;96m  %s\033[0m\n' "$dir"
+        ls "${opts[@]}" -- "$dir" 2>/dev/null | sed 's/\*$//; s|/$||'
+    }
+fi
+
+# --- Load persisted marks before dispatch ---
+if declare -F _reload_marks >/dev/null 2>&1; then
+    _reload_marks
+else
+    marked_files=()
+    [[ -f "${MARKED_FILES_FILE:-}" ]] && \
+        mapfile -t marked_files < "$MARKED_FILES_FILE" 2>/dev/null
+    ((${#marked_files[@]})) && [[ -z "${marked_files[0]}" ]] && marked_files=()
+fi
+
+# --- Dispatch ---
+case "${1:-}" in
+    -v|--version)
+        printf 'omnish %s (backend: %s, dialog: %s)\n' \
+            "$OMNISH_VERSION" "$OMNISH_BACKEND" \
+            "$([[ $OMNISH_HAS_SCRIPT_DIALOG == 1 ]] && echo script-dialog || echo fallback)"
+        exit 0
+        ;;
+
+    -h|--help)
+        help
+        exit 0
+        ;;
+
+    --backend)
+        printf '%s\n' "$OMNISH_BACKEND"
+        exit 0
+        ;;
+
+    --has-dialog)
+        printf '%s\n' "$OMNISH_HAS_SCRIPT_DIALOG"
+        exit 0
+        ;;
+
+    --show-help)         shift; dialog_help ;;
+    --preview-file)      shift; [[ $# -ge 1 ]] || { echo "error: --preview-file requires PATH" >&2; exit 2; }; _preview_file "$1" ;;
+    --dua)               shift; _dua_interactive "${1:-$PWD}" ;;
+    --dua-preview)       shift; [[ $# -ge 1 ]] || { echo "error: --dua-preview requires PATH" >&2; exit 2; }; _dua_preview "$1" ;;
+    --delete-file)       shift; [[ $# -ge 1 ]] || { echo "error: --delete-file requires PATH" >&2; exit 2; }; delete_file "$1" ;;
+    --move-file)         shift; [[ $# -ge 1 ]] || { echo "error: --move-file requires PATH" >&2; exit 2; }; move_file "$1" ;;
+    --copy-file)         shift; [[ $# -ge 1 ]] || { echo "error: --copy-file requires PATH" >&2; exit 2; }; copy_file "$1" ;;
+    --create-file)       shift; create_file ;;
+    --create-directory)  shift; create_directory ;;
+    --create-symlink)    shift; [[ $# -ge 1 ]] || { echo "error: --create-symlink requires PATH" >&2; exit 2; }; create_symlink "$1" ;;
+    --xdg-open)          shift; [[ $# -ge 1 ]] || { echo "error: --xdg-open requires PATH" >&2; exit 2; }; xdg_open "$1" ;;
+    --search-term)       shift; search_term ;;
+    --undo)              undo_trash ;;
+    --empty-trash)       empty_trash ;;
+    --trash-view)        trash_view ;;
+    --list-files)        shift; safe_ls "${1:-$PWD}" ;;
+    --system-menu)       _sys_menu ;;
+
+    --mark-file|--mark-all-only|--mark-all-toggle|--update-header|--last-folder|--history-folder|--my-terminal)
+        if [[ "$OMNISH_BACKEND" != "fzf" ]]; then
+            echo "error: ${1} requires OMNISH_BACKEND=fzf (current: $OMNISH_BACKEND)" >&2
+            exit 1
+        fi
+        case "$1" in
+            --mark-file)        shift; [[ $# -ge 1 ]] || { echo "error: --mark-file requires PATH" >&2; exit 2; }; mark "$1" ;;
+            --mark-all-only)    mark_all_only ;;
+            --mark-all-toggle)  mark_all_toggle ;;
+            --update-header)    f_header_text ;;
+            --last-folder)      last_folder ;;
+            --history-folder)   history_folder ;;
+            --my-terminal)      my_terminal ;;
+        esac
+        ;;
+
+    *)
+        main "$@"
+        ;;
+esac
