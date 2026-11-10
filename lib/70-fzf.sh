@@ -27,15 +27,15 @@
 
 safe_ls() {
     local dir="${1:-$PWD}"
-    local showhidden='' list_opts='--group-directories-first --color=always'
+    local -a list_opts=(--group-directories-first --color=always)
 
     if [[ -f "$TMP_OMNISH_DIR/grep" ]]; then
         printf '\033[1;96m  %s\033[0m\n' "$dir"
         cat "$TMP_OMNISH_DIR/grep"
     else
-        [[ -f "$CACHE_OMNISH_DIR/showhidden" ]] && showhidden='-a'
+        [[ -f "$CACHE_OMNISH_DIR/showhidden" ]] && list_opts+=(-a)
         printf '\033[1;96m  %s\033[0m\n' "$dir"
-        ls $showhidden $list_opts "$dir" 2>/dev/null | sed 's/\*$//; s|/$||'
+        ls "${list_opts[@]}" -- "$dir" 2>/dev/null | sed 's/\*$//; s|/$||'
     fi
 }
 
@@ -47,8 +47,11 @@ f_header_text() {
 
     # [FIX layout 3] short terminals get a compact one-line header so the
     # file list has room to breathe; tall terminals keep the boxed header.
-    local lines=${LINES:-0}
-    (( lines < 1 )) && lines=$(tput lines 2>/dev/null) && [[ -n "$lines" ]] || lines=24
+    local lines="${LINES:-}"
+    if [[ ! "$lines" =~ ^[0-9]+$ ]] || (( lines < 1 )); then
+        lines=$(tput lines 2>/dev/null) || lines=24
+        [[ "$lines" =~ ^[0-9]+$ ]] || lines=24
+    fi
 
     if (( lines < 32 )); then
         printf 'omnish v%s | ?: help | ^X: sys | ^D: trash | Preview: %s | Files: %s' \
@@ -200,6 +203,9 @@ fzf_binds() {
     local header_text margin_preview dua_key helpfile
     header_text=$(f_header_text)
     margin_preview=$(cat "$MARGIN_PREVIEW" 2>/dev/null || echo 60)
+    # fzf accepts either a fixed character width (e.g. 60) or a percentage
+    # (e.g. 60%). Reject malformed persisted values before passing them on.
+    [[ "$margin_preview" =~ ^[0-9]+%?$ ]] || margin_preview=60
     dua_key="ctrl-u"
     helpfile="$(_ff_ensure_helpfile)"
 
@@ -256,7 +262,10 @@ fzf_binds() {
             --bind "esc:execute(echo \"$PWD\" > \"$CACHE_OMNISH_DIR/last_folder\"; echo 130 > \"$TMP_OMNISH_DIR/signal\")+abort" \
             --bind "ctrl-q:execute(echo \"$PWD\" > \"$CACHE_OMNISH_DIR/last_folder\"; echo 130 > \"$TMP_OMNISH_DIR/signal\")+abort" \
             --bind "ctrl-c:execute(echo \"$PWD\" > \"$CACHE_OMNISH_DIR/last_folder\"; echo 130 > \"$TMP_OMNISH_DIR/signal\")+abort" \
-            --preview "bash \"$SCRIPT_PATH\" --preview-file \"$path/{}\"" \
+            # Keep fzf's shell-escaped placeholder outside the surrounding
+            # quoted directory argument. Quoting "$path/{}" would preserve
+            # fzf's inserted quotes as literal filename characters.
+            --preview "bash \"$SCRIPT_PATH\" --preview-file \"$path\"/{}" \
             --preview-window "right:${margin_preview}:noborder${hidepreview}" \
             --expect=enter,right)
 
