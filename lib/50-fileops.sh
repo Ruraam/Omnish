@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # omnish — file operations
 # Each op uses cmd_line / cmd_yes_no (P0) instead of whiptail.
 # Progress feedback via 25-progress.sh: progress_begin/tick/end or spinner_begin/end.
@@ -60,6 +61,8 @@ delete_file() {
     _delete_marked() {
         (( ${#marked_files[@]} == 0 )) && { status_msg "no files marked"; return; }
         cmd_yes_no "Trash ${#marked_files[@]} item(s)?"
+        # cmd_yes_no in lib/15-dialog.sh sets this shared global.
+        # shellcheck disable=SC2154
         [[ $cmd_reply == yes ]] || { status_msg "cancelled"; return; }
         local failed=0 f total
         total=${#marked_files[@]}
@@ -174,14 +177,6 @@ copy_file() {
 
     [[ -e "$file" || -L "$file" ]] || { status_msg "nothing selected"; return; }
     local base="${file##*/}"
-    # [FIX 7] dotfile-friendly suggested name
-    local suggested
-    if [[ "$base" == *.* && "$base" != .* && "${base%.*}" != "" ]]; then
-        suggested="${base%.*}_copy.${base##*.}"      # foo.txt → foo_copy.txt
-    else
-        suggested="${base}_copy"                       # foo, .gitignore → …_copy
-    fi
-
     cmd_line "copy '${base}' as: "
     local name="$cmd_reply"
     [[ -z "$name" ]] && return
