@@ -61,6 +61,34 @@ quoted_name="'literal quote' and \\backslash"
 [[ "$(clean_path "$quoted_name")" == "$quoted_name" ]] || fail "clean_path altered literal quote/backslash characters"
 pass "literal path characters"
 
+# Replacing a symlink target must not pre-delete the existing data.
+# shellcheck source=../lib/50-fileops.sh
+source "$ROOT/lib/50-fileops.sh"
+status_msg() { :; }
+cmd_line() { cmd_reply="$INPUT_REPLY"; }
+cmd_yes_no() { cmd_reply=yes; }
+
+reset_trash
+mkdir -p -- "$TEST_ROOT/symlink-ops"
+cd -- "$TEST_ROOT/symlink-ops"
+printf 'link source\n' > source.txt
+printf 'existing destination\n' > destination
+INPUT_REPLY=destination
+create_symlink source.txt
+[[ -L destination ]] || fail "existing file was not replaced by a symlink"
+[[ "$(readlink -- destination)" == "$TEST_ROOT/symlink-ops/source.txt" ]] || fail "symlink target is incorrect"
+pass "atomic symlink replacement"
+
+# If an existing directory cannot be replaced, it must remain untouched.
+mkdir -- existing-directory
+printf 'preserve directory\n' > existing-directory/keep.txt
+INPUT_REPLY=existing-directory
+if create_symlink source.txt; then
+    fail "unexpectedly replaced a directory with a symlink"
+fi
+assert_file_content "existing-directory/keep.txt" "preserve directory"
+pass "failed symlink replacement preserves existing directory"
+
 # A normal item must return to the absolute path from which it was trashed.
 reset_trash
 mkdir -p -- "$TEST_ROOT/original" "$TEST_ROOT/elsewhere"
