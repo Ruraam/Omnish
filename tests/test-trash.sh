@@ -16,8 +16,10 @@ spinner_end() { :; }
 progress_begin() { :; }
 progress_set() { :; }
 progress_end() { :; }
-cmd_yes_no() { cmd_reply=yes; }
+# cmd_yes_no and the sourced trash module share this test double state.
+# shellcheck disable=SC2034
 cmd_reply=yes
+cmd_yes_no() { cmd_reply=yes; }
 
 # shellcheck source=../lib/60-trash.sh
 source "$ROOT/lib/60-trash.sh"
