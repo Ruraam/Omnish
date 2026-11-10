@@ -66,6 +66,7 @@ pass "literal path characters"
 source "$ROOT/lib/50-fileops.sh"
 status_msg() { :; }
 cmd_line() { cmd_reply="$INPUT_REPLY"; }
+# shellcheck disable=SC2034
 cmd_yes_no() { cmd_reply=yes; }
 
 reset_trash
