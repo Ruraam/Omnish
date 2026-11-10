@@ -22,6 +22,7 @@ jobs:
           bash -n lib/10-utils.sh
           bash -n lib/50-fileops.sh
           bash -n lib/60-trash.sh
+          bash -n lib/70-fzf.sh
           bash -n tests/test-trash.sh
       - name: Run trash regression tests
         run: bash tests/test-trash.sh
