@@ -299,17 +299,53 @@ create_symlink() {
     local name="$cmd_reply"
     [[ -z "$name" ]] && return
 
-    if [[ -e "$PWD/$name" ]]; then
+    local destination="$PWD/$name"
+    local overwrite=0
+    if [[ -e "$destination" || -L "$destination" ]]; then
         cmd_yes_no "Overwrite '$name'?"
+        # cmd_yes_no in lib/15-dialog.sh sets this shared global.
+        # shellcheck disable=SC2154
         [[ $cmd_reply == yes ]] || return
-        rm -rf -- "$PWD/$name"
+        overwrite=1
     fi
+
     # [FIX 9] -- on realpath (paths starting with -)
     local target
     target=$(realpath -- "$file" 2>/dev/null) || target="$PWD/$file"
-    if ln -s -- "$target" "$PWD/$name" 2>/dev/null; then
-        status_msg "linked: $name"
-    else
-        status_msg "symlink failed"
+
+    if (( ! overwrite )); then
+        if ln -s -- "$target" "$destination" 2>/dev/null; then
+            status_msg "linked: $name"
+        else
+            status_msg "symlink failed"
+            return 1
+        fi
+        return 0
     fi
+
+    # Build the replacement symlink beside the destination, then rename it
+    # over the old entry. A failed ln/mv never deletes the existing target.
+    local temporary_link attempts=0
+    while (( attempts < 10 )); do
+        temporary_link="${destination}.omnish-link.$$.$RANDOM"
+        if ln -s -- "$target" "$temporary_link" 2>/dev/null; then
+            break
+        fi
+        temporary_link=""
+        attempts=$((attempts + 1))
+    done
+
+    [[ -n "$temporary_link" ]] || {
+        status_msg "cannot prepare replacement symlink"
+        return 1
+    }
+
+    if mv -T -f -- "$temporary_link" "$destination" 2>/dev/null; then
+        status_msg "linked: $name"
+        return 0
+    fi
+
+    rm -f -- "$temporary_link" 2>/dev/null || :
+    status_msg "symlink failed; existing destination kept"
+    return 1
 }
