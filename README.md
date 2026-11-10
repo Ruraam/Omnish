@@ -2,7 +2,7 @@
   <img src="assets/omnish-banner.svg" alt="omnish — modular file manager & system console" width="100%">
 </p>
 
-**A modular, pure-bash file manager and system console for BubbleOS and all Linux distribution.**
+**A modular command-line environment for file management, system administration and maintenance.**
 
 `omnish` is a terminal file manager with a system administration panel
 built in. It runs on **any POSIX-ish Linux** with bash, coreutils, and
