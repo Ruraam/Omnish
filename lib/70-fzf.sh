@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # omnish — fzf bindings, header, listing, navigation
 #
 # [FIX P0-2] ctrl-h now uses change-preview+show-preview so the help pane
@@ -125,6 +126,8 @@ mark_all_toggle() {
 search_term() {
     command -v rg >/dev/null 2>&1 || { messages "Error" "install ripgrep"; return 1; }
     cmd_line "Grep: "
+    # cmd_line in lib/15-dialog.sh sets this shared global.
+    # shellcheck disable=SC2154
     local term="$cmd_reply"
     [[ -z "$term" ]] && return
     rg --files-with-matches --color=never -i "$term" 2>/dev/null > "$TMP_OMNISH_DIR/grep" &
@@ -348,7 +351,7 @@ fzf_main() {
         if [[ -f "$TMP_OMNISH_DIR/last_folder" ]]; then
             local d
             d=$(cat "$CACHE_OMNISH_DIR/last_folder" 2>/dev/null)
-            [[ -d "$d" ]] && builtin cd "$d"
+            [[ -d "$d" ]] && builtin cd "$d" || :
             rm -f "$TMP_OMNISH_DIR/last_folder"
             add_to_history "$PWD"
             continue
@@ -356,7 +359,7 @@ fzf_main() {
         if [[ -f "$TMP_OMNISH_DIR/last_dir" ]]; then
             local h
             h=$(cat "$TMP_OMNISH_DIR/last_dir" 2>/dev/null)
-            [[ -d "$h" ]] && builtin cd "$h"
+            [[ -d "$h" ]] && builtin cd "$h" || :
             rm -f "$TMP_OMNISH_DIR/last_dir"
             continue
         fi
