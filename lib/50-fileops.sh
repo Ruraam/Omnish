@@ -137,9 +137,16 @@ copy_file() {
         (( ${#marked_files[@]} == 0 )) && { status_msg "no files marked"; return; }
         [[ -w "$PWD" ]] || { status_msg "no write access"; return; }
 
-        local existing=() f
+        local existing=() f base
+        local -A seen=()
         for f in "${marked_files[@]}"; do
-            [[ -e "$PWD/${f##*/}" ]] && existing+=("${f##*/}")
+            base=${f##*/}
+            if [[ ${seen[$base]+present} ]]; then
+                status_msg "duplicate destination name: $base"
+                return 1
+            fi
+            seen[$base]=1
+            [[ -e "$PWD/$base" || -L "$PWD/$base" ]] && existing+=("$base")
         done
 
         if (( ${#existing[@]} > 0 )); then
@@ -224,9 +231,16 @@ move_file() {
         (( ${#marked_files[@]} == 0 )) && { status_msg "no files marked"; return; }
         [[ -w "$PWD" ]] || { status_msg "no write access"; return; }
 
-        local existing=() f
+        local existing=() f base
+        local -A seen=()
         for f in "${marked_files[@]}"; do
-            [[ -e "$PWD/${f##*/}" ]] && existing+=("${f##*/}")
+            base=${f##*/}
+            if [[ ${seen[$base]+present} ]]; then
+                status_msg "duplicate destination name: $base"
+                return 1
+            fi
+            seen[$base]=1
+            [[ -e "$PWD/$base" || -L "$PWD/$base" ]] && existing+=("$base")
         done
 
         if (( ${#existing[@]} > 0 )); then
