@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # omnish — bash loop backend (P4)
 # Replaces fzf for the main navigation pane.
 # Same contract as 70-fzf.sh: provides loop_main().
@@ -584,6 +585,8 @@ loop_rename_current() {
     local base="${entry##*/}"
     loop_show_help=0
     cmd_line "rename '${base}' to: "
+    # cmd_line in lib/15-dialog.sh sets this shared global.
+    # shellcheck disable=SC2154
     local new="$cmd_reply"
     [[ -z "$new" || "$new" == "$base" ]] && loop_draw && return
     if [[ -e "$PWD/$new" ]]; then
