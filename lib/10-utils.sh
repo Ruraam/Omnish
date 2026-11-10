@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # omnish — utilities
 #
 # [FIX Bug 1] trap cleanup was at module scope → every preview subprocess
@@ -28,7 +29,11 @@ get_term_size() {
     else
         LINES=${LINES:-24}; COLUMNS=${COLUMNS:-80}
     fi
+    # Shared with lib/20-ui.sh (cross-file global).
+    # shellcheck disable=SC2034
     message_height=$(( LINES / 2 ))
+    # Shared with lib/20-ui.sh (cross-file global).
+    # shellcheck disable=SC2034
     message_width=$(( COLUMNS / 2 ))
 }
 
