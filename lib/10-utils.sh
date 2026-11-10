@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # omnish — utilities
 #
 # [FIX Bug 1] trap cleanup was at module scope → every preview subprocess
@@ -8,16 +9,9 @@
 #             filename; only fzf's shell-escaping backslashes are removed.
 
 clean_path() {
-    local p="$1"
-    # Strip leading/trailing whitespace
-    p="${p#"${p%%[![:space:]]*}"}"
-    p="${p%"${p##*[![:space:]]}"}"
-    # Strip surrounding single quotes (fzf wraps paths with spaces sometimes)
-    p="${p#\'}"; p="${p%\'}"
-    # Only remove backslashes that escape shell-special chars (fzf escaping).
-    # This preserves legitimate backslashes in filenames.
-    p=$(printf '%s' "$p" | sed 's/\\\([ ()[\]{}!'"'"'"!&;<>|*?#~]\)/\1/g')
-    printf '%s' "$p"
+    # Preserve filenames literally. Spaces, quotes and backslashes are valid
+    # path characters; callers must pass the original path, never shell text.
+    printf '%s' "$1"
 }
 
 _human_size() {
@@ -35,7 +29,11 @@ get_term_size() {
     else
         LINES=${LINES:-24}; COLUMNS=${COLUMNS:-80}
     fi
+    # Shared with lib/20-ui.sh (cross-file global).
+    # shellcheck disable=SC2034
     message_height=$(( LINES / 2 ))
+    # Shared with lib/20-ui.sh (cross-file global).
+    # shellcheck disable=SC2034
     message_width=$(( COLUMNS / 2 ))
 }
 

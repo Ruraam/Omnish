@@ -1,0 +1,43 @@
+name: Trash regression tests
+
+on:
+  push:
+    branches:
+      - fix/file-operations
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  trash-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Validate Bash syntax
+        run: |
+          bash -n omnish
+          bash -n tests/test-entrypoint-path.sh
+          bash -n lib/10-utils.sh
+          bash -n lib/50-fileops.sh
+          bash -n lib/60-trash.sh
+          bash -n lib/70-fzf.sh
+          bash -n lib/70-loop.sh
+          bash -n tests/test-trash.sh
+          bash -n tests/test-backends.sh
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes shellcheck
+      - name: Run ShellCheck
+        run: |
+          shellcheck --severity=warning lib/10-utils.sh lib/50-fileops.sh lib/60-trash.sh lib/70-fzf.sh lib/70-loop.sh tests/test-trash.sh tests/test-backends.sh
+      - name: Run entrypoint path regression tests
+        run: bash tests/test-entrypoint-path.sh
+      - name: Run trash regression tests
+        run: bash tests/test-trash.sh
+      - name: Run backend regression tests
+        run: bash tests/test-backends.sh

@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # omnish — file operations
 # Each op uses cmd_line / cmd_yes_no (P0) instead of whiptail.
 # Progress feedback via 25-progress.sh: progress_begin/tick/end or spinner_begin/end.
@@ -45,7 +46,9 @@ delete() {
         trash "$file" && return 0
         return 1
     fi
-    [[ -w "$file" ]] && rm -rf -- "$file" 2>/dev/null && return 0
+    local parent
+    parent=$(dirname -- "$file")
+    [[ -w "$parent" && -x "$parent" ]] && rm -rf -- "$file" 2>/dev/null && return 0
     return 1
 }
 
@@ -58,6 +61,8 @@ delete_file() {
     _delete_marked() {
         (( ${#marked_files[@]} == 0 )) && { status_msg "no files marked"; return; }
         cmd_yes_no "Trash ${#marked_files[@]} item(s)?"
+        # cmd_yes_no in lib/15-dialog.sh sets this shared global.
+        # shellcheck disable=SC2154
         [[ $cmd_reply == yes ]] || { status_msg "cancelled"; return; }
         local failed=0 f total
         total=${#marked_files[@]}
@@ -76,7 +81,7 @@ delete_file() {
     }
 
     # [FIX 6] dead *"..."* pattern removed
-    if [[ ! -e "$file" ]]; then
+    if [[ ! -e "$file" && ! -L "$file" ]]; then
         (( ${#marked_files[@]} > 0 )) && _delete_marked
         return
     fi
@@ -135,9 +140,16 @@ copy_file() {
         (( ${#marked_files[@]} == 0 )) && { status_msg "no files marked"; return; }
         [[ -w "$PWD" ]] || { status_msg "no write access"; return; }
 
-        local existing=() f
+        local existing=() f base
+        local -A seen=()
         for f in "${marked_files[@]}"; do
-            [[ -e "$PWD/${f##*/}" ]] && existing+=("${f##*/}")
+            base=${f##*/}
+            if [[ ${seen[$base]+present} ]]; then
+                status_msg "duplicate destination name: $base"
+                return 1
+            fi
+            seen[$base]=1
+            [[ -e "$PWD/$base" || -L "$PWD/$base" ]] && existing+=("$base")
         done
 
         if (( ${#existing[@]} > 0 )); then
@@ -163,16 +175,8 @@ copy_file() {
         return
     fi
 
-    [[ -e "$file" ]] || { status_msg "nothing selected"; return; }
+    [[ -e "$file" || -L "$file" ]] || { status_msg "nothing selected"; return; }
     local base="${file##*/}"
-    # [FIX 7] dotfile-friendly suggested name
-    local suggested
-    if [[ "$base" == *.* && "$base" != .* && "${base%.*}" != "" ]]; then
-        suggested="${base%.*}_copy.${base##*.}"      # foo.txt → foo_copy.txt
-    else
-        suggested="${base}_copy"                       # foo, .gitignore → …_copy
-    fi
-
     cmd_line "copy '${base}' as: "
     local name="$cmd_reply"
     [[ -z "$name" ]] && return
@@ -222,9 +226,16 @@ move_file() {
         (( ${#marked_files[@]} == 0 )) && { status_msg "no files marked"; return; }
         [[ -w "$PWD" ]] || { status_msg "no write access"; return; }
 
-        local existing=() f
+        local existing=() f base
+        local -A seen=()
         for f in "${marked_files[@]}"; do
-            [[ -e "$PWD/${f##*/}" ]] && existing+=("${f##*/}")
+            base=${f##*/}
+            if [[ ${seen[$base]+present} ]]; then
+                status_msg "duplicate destination name: $base"
+                return 1
+            fi
+            seen[$base]=1
+            [[ -e "$PWD/$base" || -L "$PWD/$base" ]] && existing+=("$base")
         done
 
         if (( ${#existing[@]} > 0 )); then
@@ -250,7 +261,7 @@ move_file() {
         return
     fi
 
-    [[ -e "$file" ]] || { status_msg "nothing selected"; return; }
+    [[ -e "$file" || -L "$file" ]] || { status_msg "nothing selected"; return; }
     local base="${file##*/}"
     cmd_line "move '${base}' to: "
     local name="$cmd_reply"
@@ -281,24 +292,60 @@ create_symlink() {
     local path="$1"
     local file
     file=$(clean_path "$path" | sed 's|^\./||g')
-    [[ -e "$file" ]] || { status_msg "nothing selected"; return; }
+    [[ -e "$file" || -L "$file" ]] || { status_msg "nothing selected"; return; }
 
     local base="${file##*/}"
     cmd_line "symlink '${base}' as: "
     local name="$cmd_reply"
     [[ -z "$name" ]] && return
 
-    if [[ -e "$PWD/$name" ]]; then
+    local destination="$PWD/$name"
+    local overwrite=0
+    if [[ -e "$destination" || -L "$destination" ]]; then
         cmd_yes_no "Overwrite '$name'?"
+        # cmd_yes_no in lib/15-dialog.sh sets this shared global.
+        # shellcheck disable=SC2154
         [[ $cmd_reply == yes ]] || return
-        rm -rf -- "$PWD/$name"
+        overwrite=1
     fi
+
     # [FIX 9] -- on realpath (paths starting with -)
     local target
     target=$(realpath -- "$file" 2>/dev/null) || target="$PWD/$file"
-    if ln -s -- "$target" "$PWD/$name" 2>/dev/null; then
-        status_msg "linked: $name"
-    else
-        status_msg "symlink failed"
+
+    if (( ! overwrite )); then
+        if ln -s -- "$target" "$destination" 2>/dev/null; then
+            status_msg "linked: $name"
+        else
+            status_msg "symlink failed"
+            return 1
+        fi
+        return 0
     fi
+
+    # Build the replacement symlink beside the destination, then rename it
+    # over the old entry. A failed ln/mv never deletes the existing target.
+    local temporary_link attempts=0
+    while (( attempts < 10 )); do
+        temporary_link="${destination}.omnish-link.$$.$RANDOM"
+        if ln -s -- "$target" "$temporary_link" 2>/dev/null; then
+            break
+        fi
+        temporary_link=""
+        attempts=$((attempts + 1))
+    done
+
+    [[ -n "$temporary_link" ]] || {
+        status_msg "cannot prepare replacement symlink"
+        return 1
+    }
+
+    if mv -T -f -- "$temporary_link" "$destination" 2>/dev/null; then
+        status_msg "linked: $name"
+        return 0
+    fi
+
+    rm -f -- "$temporary_link" 2>/dev/null || :
+    status_msg "symlink failed; existing destination kept"
+    return 1
 }
