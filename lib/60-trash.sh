@@ -310,21 +310,39 @@ empty_trash() {
 # ===============================================================
 trash_view() {
     local f relative batch base batch_dir destination parent overwrite=0 rc
-    f=$(
+    local selection_file
+
+    # Use NUL records end-to-end: valid filenames may contain spaces, quotes,
+    # tabs, or newlines. Command substitution cannot safely carry NUL bytes.
+    selection_file=$(mktemp "${TMPDIR:-/tmp}/omnish-trash.XXXXXX") || {
+        status_msg "cannot create temporary selection file"
+        return 1
+    }
+
+    if ! {
         while IFS= read -r -d '' batch_dir; do
             if _trash_batch_has_metadata "$batch_dir"; then
                 find "$batch_dir" -mindepth 1 -maxdepth 1 \
-                    ! -path "$batch_dir/.omnish-meta" -print 2>/dev/null
+                    ! -path "$batch_dir/.omnish-meta" -print0 2>/dev/null
             else
-                find "$batch_dir" -mindepth 1 -maxdepth 1 -print 2>/dev/null
+                find "$batch_dir" -mindepth 1 -maxdepth 1 -print0 2>/dev/null
             fi
-        done < <(find "$OMNI_TRASH" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null) \
-        | head -200 \
-        | fzf --header "Trash: $OMNI_TRASH | Enter: restore | Esc: quit" \
-              --preview 'ls -la -- {} 2>/dev/null' \
-              --preview-window 'right:50%:wrap'
-    )
-    [[ -n "$f" ]] || return
+        done < <(find "$OMNI_TRASH" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null)
+    } | head -z -n 200 \
+      | fzf --read0 --print0 \
+            --header "Trash: $OMNI_TRASH | Enter: restore | Esc: quit" \
+            --preview "ls -la -- \"$OMNI_TRASH/{1}\" 2>/dev/null" \
+            --preview-window 'right:50%:wrap' > "$selection_file"; then
+        rm -f -- "$selection_file"
+        return 0
+    fi
+
+    if ! IFS= read -r -d '' f < "$selection_file"; then
+        rm -f -- "$selection_file"
+        return 0
+    fi
+    rm -f -- "$selection_file"
+
     relative="${f#"$OMNI_TRASH"/}"
     batch="${relative%%/*}"
     base="${relative#*/}"
@@ -346,7 +364,7 @@ trash_view() {
             return 1
         }
     else
-        # Compatibility for older batches that have no origin metadata.
+        # Compatibility for batches created before origin metadata existed.
         destination="./$base"
     fi
 
