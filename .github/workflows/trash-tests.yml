@@ -19,6 +19,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Validate Bash syntax
         run: |
+          bash -n omnish
+          bash -n tests/test-entrypoint-path.sh
           bash -n lib/10-utils.sh
           bash -n lib/50-fileops.sh
           bash -n lib/60-trash.sh
@@ -31,5 +33,7 @@ jobs:
       - name: Run ShellCheck
         run: |
           shellcheck --severity=warning lib/10-utils.sh lib/50-fileops.sh lib/60-trash.sh lib/70-fzf.sh tests/test-trash.sh
+      - name: Run entrypoint path regression tests
+        run: bash tests/test-entrypoint-path.sh
       - name: Run trash regression tests
         run: bash tests/test-trash.sh
