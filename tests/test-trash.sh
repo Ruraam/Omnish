@@ -50,6 +50,15 @@ batch_payload_count() {
     printf '%s' "$count"
 }
 
+# Path normalization must not trim or unquote valid filename characters.
+# shellcheck source=../lib/10-utils.sh
+source "$ROOT/lib/10-utils.sh"
+spaced_name='  name with surrounding spaces  '
+quoted_name="'literal quote' and \\backslash"
+[[ "$(clean_path "$spaced_name")" == "$spaced_name" ]] || fail "clean_path trimmed spaces"
+[[ "$(clean_path "$quoted_name")" == "$quoted_name" ]] || fail "clean_path altered literal quote/backslash characters"
+pass "literal path characters"
+
 # A normal item must return to the absolute path from which it was trashed.
 reset_trash
 mkdir -p -- "$TEST_ROOT/original" "$TEST_ROOT/elsewhere"
