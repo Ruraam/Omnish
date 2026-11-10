@@ -157,6 +157,10 @@ empty_trash() {
         find "$OMNI_TRASH" -mindepth 1 -type d -empty -delete 2>/dev/null
     fi
 
+    if find "$OMNI_TRASH" -mindepth 1 -print -quit 2>/dev/null | grep -q .; then
+        status_msg "trash could not be completely emptied"
+        return 1
+    fi
     status_msg "trash emptied"
 }
 
@@ -181,10 +185,11 @@ trash_view() {
         return 1
     fi
 
+    local overwrite=0
     if [[ -e "./$base" || -L "./$base" ]]; then
         cmd_yes_no "'$base' exists in cwd. Overwrite?"
         if [[ $cmd_reply == yes ]]; then
-            rm -rf -- "./$base"
+            overwrite=1
         else
             status_msg "cancelled"
             return 1
@@ -192,7 +197,14 @@ trash_view() {
     fi
 
     spinner_begin "restoring $base"
-    if mv -- "$batch_dir/$base" ./ 2>/dev/null; then
+    # Never rm the destination before the move: if the move fails, the
+    # user's existing data would otherwise already be lost.
+    if (( overwrite )); then
+        mv -T -f -- "$batch_dir/$base" "./$base" 2>/dev/null
+    else
+        mv -T -- "$batch_dir/$base" "./$base" 2>/dev/null
+    fi
+    if [[ $? == 0 ]]; then
         spinner_end
         status_msg "restored: $base"
         rmdir -- "$batch_dir" 2>/dev/null
