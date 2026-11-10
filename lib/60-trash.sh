@@ -95,7 +95,7 @@ _trash_cleanup_batch() {
 # ===============================================================
 trash() {
     local dir meta_dir marker f source original stored target target_name
-    local meta_file suffix trashed=0 failed=0
+    local meta_file suffix resolved_source resolved_trash trashed=0 failed=0
     local total=$#
 
     mkdir -p -- "$OMNI_TRASH" 2>/dev/null || {
@@ -139,7 +139,24 @@ trash() {
         fi
 
         stored="${source##*/}"
-        [[ -n "$stored" ]] || { failed=$((failed + 1)); continue; }
+        # Never allow "." / ".." to become a payload target, and never move
+        # the trash directory itself (or an ancestor containing it) into trash.
+        if [[ -z "$stored" || "$stored" == "." || "$stored" == ".." ]]; then
+            failed=$((failed + 1))
+            continue
+        fi
+        resolved_source=$(realpath -m -- "$source" 2>/dev/null) || {
+            failed=$((failed + 1)); continue
+        }
+        resolved_trash=$(realpath -m -- "$OMNI_TRASH" 2>/dev/null) || {
+            failed=$((failed + 1)); continue
+        }
+        if [[ "$resolved_source" == "$resolved_trash" \
+           || "$resolved_source" == "$resolved_trash/"* \
+           || "$resolved_trash" == "$resolved_source/"* ]]; then
+            failed=$((failed + 1))
+            continue
+        fi
 
         # Keep every payload name unique, including repeated basenames.
         target="$dir/$stored"
@@ -295,7 +312,9 @@ empty_trash() {
         find "$OMNI_TRASH" -mindepth 1 -delete 2>/dev/null
         spinner_end
     else
-        find "$OMNI_TRASH" -mindepth 1 -type d -empty -delete 2>/dev/null
+        # Also remove symlinks and special files; counting regular files alone
+        # must not leave a non-empty trash behind.
+        find "$OMNI_TRASH" -mindepth 1 -delete 2>/dev/null
     fi
 
     if find "$OMNI_TRASH" -mindepth 1 -print -quit 2>/dev/null | grep -q .; then
