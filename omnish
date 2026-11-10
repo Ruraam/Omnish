@@ -6,10 +6,26 @@
 #   OMNISH_BACKEND=fzf   → use lib/70-fzf.sh (requires fzf)
 #   OMNISH_BACKEND=loop  → use lib/70-loop.sh (pure bash, no fzf)
 #   OMNISH_BACKEND=auto  → fzf if available, else loop (default)
+#
+# [FIX self] Self-path resolution is pure bash (no readlink -f / realpath
+#            dependency) so the entrypoint works on macOS/BSD and in any
+#            env where those tools are missing or non-standard.
 
 trap "" SIGTSTP
 
-SELF="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}")"
+# --- Resolve own path robustly (symlink-safe, POSIX-portable) ---
+_omnish_resolve_self() {
+    local src="${BASH_SOURCE[0]}"
+    while [[ -L "$src" ]]; do
+        local dir
+        dir=$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd -P)
+        src=$(readlink "$src") || break
+        [[ "$src" != /* ]] && src="$dir/$src"
+    done
+    (cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd -P)/$(basename "$src")
+}
+SELF="$(_omnish_resolve_self)"
+
 OMNISH_ROOT="${SELF%/*}"
 OMNISH_VERSION="3.0.0"
 OMNISH_ENTRYPOINT="$SELF"
