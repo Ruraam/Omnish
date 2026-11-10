@@ -28,7 +28,14 @@ loop_reset_terminal() {
 }
 
 loop_clear_scroll() {
-    printf '\e[1;%sH\e[J\e[1;%sr' "$((LINES-1))" "$((LINES-1))"
+    local bottom="${LINES:-24}"
+    [[ "$bottom" =~ ^[0-9]+$ ]] || bottom=24
+    (( bottom > 1 )) && (( bottom-- )) || bottom=1
+
+    # Clear the complete content area from its real origin. The old cursor
+    # sequence used row=1, column=LINES-1, which left stale content behind
+    # and made the list pane appear blank or partially overwritten.
+    printf '\e[1;1H\e[J\e[1;%sr' "$bottom"
 }
 
 loop_hide_cursor() { printf '\e[?25l'; }
@@ -83,15 +90,21 @@ loop_read_dir() {
     [[ "$base" == "/" ]] && base=""
 
     local -a entries=()
+    local had_nullglob=0 had_dotglob=0
+    shopt -q nullglob && had_nullglob=1
+    shopt -q dotglob && had_dotglob=1
+
     shopt -s nullglob
     if [[ -f "$CACHE_OMNISH_DIR/showhidden" ]]; then
         shopt -s dotglob
-        entries=("$base"/*)
-        shopt -u dotglob
     else
-        entries=("$base"/*)
+        shopt -u dotglob
     fi
-    shopt -u nullglob
+    entries=("$base"/*)
+
+    # Do not leak shell-option changes into the rest of the application.
+    (( had_dotglob )) && shopt -s dotglob || shopt -u dotglob
+    (( had_nullglob )) && shopt -s nullglob || shopt -u nullglob
 
     for item in "${entries[@]}"; do
         [[ -e "$item" || -L "$item" ]] || continue
@@ -154,27 +167,35 @@ loop_print_line() {
 # ===============================================================
 loop_draw_preview() {
     local col="$1" width="$2" lines="$3"
-    local tmpf="$TMP_OMNISH_DIR/loop_preview.$$"
+    local tmpf="$TMP_OMNISH_DIR/loop_preview.$"
+    : > "$tmpf" || return 1
 
     if (( ${loop_show_help:-0} )); then
         local helpfile
         helpfile="$(_loop_ensure_helpfile)"
-        [[ -r "$helpfile" ]] && cp "$helpfile" "$tmpf" 2>/dev/null
+        [[ -r "$helpfile" ]] && cp -- "$helpfile" "$tmpf" 2>/dev/null
     else
         local entry="${loop_list[loop_scroll]:-}"
-        [[ -z "$entry" || "$entry" == "empty" ]] && return
-        _preview_file "$entry" > "$tmpf" 2>/dev/null
+        if [[ -n "$entry" && "$entry" != "empty" ]]; then
+            _preview_file "$entry" > "$tmpf" 2>/dev/null
+        fi
     fi
 
-    local row=0 line
+    # Clear only the preview pane before repainting it. This prevents stale
+    # lines from a longer previous preview remaining visible.
+    local clear_row
+    for (( clear_row=0; clear_row<lines; clear_row++ )); do
+        printf '\e[%s;%sH\e[K' "$((clear_row+1))" "$col"
+    done
+
+    local row=0 line visible
     while IFS= read -r line && (( row < lines )); do
-        local visible
         visible=$(printf '%s' "$line" | sed 's/\x1b\[[0-9;]*m//g')
         (( ${#visible} > width )) && line="${visible:0:width-1}…"
         printf '\e[%s;%sH%s\e[K' "$((row+1))" "$col" "$line"
         ((row++))
     done < "$tmpf"
-    rm -f "$tmpf"
+    rm -f -- "$tmpf"
 }
 
 # ===============================================================
@@ -188,12 +209,22 @@ loop_draw() {
     fi
 
     get_term_size
+    [[ "${LINES:-}" =~ ^[0-9]+$ ]] || LINES=24
+    [[ "${COLUMNS:-}" =~ ^[0-9]+$ ]] || COLUMNS=80
+    (( LINES > 0 )) || LINES=24
+    (( COLUMNS > 0 )) || COLUMNS=80
     loop_clear_scroll
 
+    # Keep both panes usable even on compact terminals.
     local split=$(( COLUMNS * 45 / 100 ))
+    (( split < 1 )) && split=1
+    (( split >= COLUMNS )) && split=$(( COLUMNS / 2 ))
     local list_w=$(( split - 2 ))
     local prev_w=$(( COLUMNS - split - 2 ))
     local rows=$(( LINES - 2 ))
+    (( list_w < 1 )) && list_w=1
+    (( prev_w < 1 )) && prev_w=1
+    (( rows < 1 )) && rows=1
 
     local start=0
     if (( loop_total + 1 > rows )); then
