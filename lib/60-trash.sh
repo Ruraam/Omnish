@@ -331,7 +331,7 @@ trash_view() {
     } | head -z -n 200 \
       | fzf --read0 --print0 \
             --header "Trash: $OMNI_TRASH | Enter: restore | Esc: quit" \
-            --preview "ls -la -- \"$OMNI_TRASH/{1}\" 2>/dev/null" \
+            --preview 'ls -la -- {} 2>/dev/null' \
             --preview-window 'right:50%:wrap' > "$selection_file"; then
         rm -f -- "$selection_file"
         return 0
