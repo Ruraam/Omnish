@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # omnish — trash system (P1: reversible delete)
 # Trash batches preserve original absolute paths in NUL-delimited metadata.
 # Legacy batches without metadata remain restorable to the current directory.
@@ -293,6 +294,8 @@ empty_trash() {
     if (( count == 0 )); then status_msg "trash is empty"; return 0; fi
 
     cmd_yes_no "Empty trash ($count batches)?"
+    # cmd_yes_no in lib/15-dialog.sh sets this shared global.
+    # shellcheck disable=SC2154
     [[ $cmd_reply == yes ]] || { status_msg "cancelled"; return 0; }
     total=$(find "$OMNI_TRASH" -type f 2>/dev/null | wc -l)
 
