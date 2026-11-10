@@ -24,5 +24,12 @@ jobs:
           bash -n lib/60-trash.sh
           bash -n lib/70-fzf.sh
           bash -n tests/test-trash.sh
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes shellcheck
+      - name: Run ShellCheck
+        run: |
+          shellcheck --severity=warning lib/10-utils.sh lib/50-fileops.sh lib/60-trash.sh lib/70-fzf.sh tests/test-trash.sh
       - name: Run trash regression tests
         run: bash tests/test-trash.sh
