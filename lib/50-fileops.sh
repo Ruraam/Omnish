@@ -45,7 +45,9 @@ delete() {
         trash "$file" && return 0
         return 1
     fi
-    [[ -w "$file" ]] && rm -rf -- "$file" 2>/dev/null && return 0
+    local parent
+    parent=$(dirname -- "$file")
+    [[ -w "$parent" && -x "$parent" ]] && rm -rf -- "$file" 2>/dev/null && return 0
     return 1
 }
 
@@ -76,7 +78,7 @@ delete_file() {
     }
 
     # [FIX 6] dead *"..."* pattern removed
-    if [[ ! -e "$file" ]]; then
+    if [[ ! -e "$file" && ! -L "$file" ]]; then
         (( ${#marked_files[@]} > 0 )) && _delete_marked
         return
     fi
@@ -163,7 +165,7 @@ copy_file() {
         return
     fi
 
-    [[ -e "$file" ]] || { status_msg "nothing selected"; return; }
+    [[ -e "$file" || -L "$file" ]] || { status_msg "nothing selected"; return; }
     local base="${file##*/}"
     # [FIX 7] dotfile-friendly suggested name
     local suggested
@@ -250,7 +252,7 @@ move_file() {
         return
     fi
 
-    [[ -e "$file" ]] || { status_msg "nothing selected"; return; }
+    [[ -e "$file" || -L "$file" ]] || { status_msg "nothing selected"; return; }
     local base="${file##*/}"
     cmd_line "move '${base}' to: "
     local name="$cmd_reply"
@@ -281,7 +283,7 @@ create_symlink() {
     local path="$1"
     local file
     file=$(clean_path "$path" | sed 's|^\./||g')
-    [[ -e "$file" ]] || { status_msg "nothing selected"; return; }
+    [[ -e "$file" || -L "$file" ]] || { status_msg "nothing selected"; return; }
 
     local base="${file##*/}"
     cmd_line "symlink '${base}' as: "
