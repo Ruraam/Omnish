@@ -219,6 +219,8 @@ fzf_binds() {
     # the whole terminal with the prompt at the top — the standard file
     # manager layout (ranger/lf/yazi/nnn). No trailing 2>&1 anymore: fzf
     # warnings must not end up in $selected.
+    # Keep fzf's shell-escaped {} placeholder outside the quoted directory
+    # argument; otherwise quotes inserted for filenames become literal.
     local result
     result=$(safe_ls "$path" | \
         FZF_DEFAULT_OPTS='' \
@@ -262,9 +264,6 @@ fzf_binds() {
             --bind "esc:execute(echo \"$PWD\" > \"$CACHE_OMNISH_DIR/last_folder\"; echo 130 > \"$TMP_OMNISH_DIR/signal\")+abort" \
             --bind "ctrl-q:execute(echo \"$PWD\" > \"$CACHE_OMNISH_DIR/last_folder\"; echo 130 > \"$TMP_OMNISH_DIR/signal\")+abort" \
             --bind "ctrl-c:execute(echo \"$PWD\" > \"$CACHE_OMNISH_DIR/last_folder\"; echo 130 > \"$TMP_OMNISH_DIR/signal\")+abort" \
-            # Keep fzf's shell-escaped placeholder outside the surrounding
-            # quoted directory argument. Quoting "$path/{}" would preserve
-            # fzf's inserted quotes as literal filename characters.
             --preview "bash \"$SCRIPT_PATH\" --preview-file \"$path\"/{}" \
             --preview-window "right:${margin_preview}:noborder${hidepreview}" \
             --expect=enter,right)
