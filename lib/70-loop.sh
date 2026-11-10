@@ -112,7 +112,7 @@ loop_read_dir() {
         if [[ -d "$item" ]]; then
             dirs+=("$item")
             [[ "$item" == "$OLDPWD" ]] && prev_idx=$idx
-            ((idx++))
+            ((idx += 1))
         else
             files+=("$item")
         fi
@@ -194,7 +194,7 @@ loop_draw_preview() {
         visible=$(printf '%s' "$line" | sed 's/\x1b\[[0-9;]*m//g')
         (( ${#visible} > width )) && line="${visible:0:width-1}…"
         printf '\e[%s;%sH%s\e[K' "$((row+1))" "$col" "$line"
-        ((row++))
+        ((row += 1))
     done < "$tmpf"
     rm -f -- "$tmpf"
 }
@@ -242,7 +242,7 @@ loop_draw() {
     for (( i=start; i<=loop_total && row<rows; i++ )); do
         printf '\e[%s;1H' "$((row+1))"
         loop_print_line "$i" "$list_w"
-        ((row++))
+        ((row += 1))
     done
 
     for (( row=0; row<rows; row++ )); do
