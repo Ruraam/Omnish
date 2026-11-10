@@ -11,6 +11,18 @@
 # [FIX helpfile] _ff_ensure_helpfile regenerates if the script is newer.
 # [FIX mark_all] mark_all_files resets all_files=() to avoid accumulation.
 # [FIX errors] user-visible errors go to /dev/tty (stderr is logged to disk).
+#
+# [FIX layout 1] fzf_binds neutralises FZF_DEFAULT_OPTS/FZF_DEFAULT_COMMAND
+#                so a user's shell config (e.g. --height=30%) can no longer
+#                shrink/hide the file manager pane.
+# [FIX layout 2] fzf_binds passes --height=100% and --layout=reverse
+#                explicitly, and no longer swallows fzf stderr into $selected
+#                (the old trailing `2>&1` polluted the selection buffer with
+#                fzf warnings).
+# [FIX layout 3] f_header_text shrinks to a single line on short terminals
+#                (LINES < 32) to leave room for the file list.
+# [FIX trap]     fzf_main restores the terminal (cursor + alt-screen) on
+#                exit/INT/TERM in addition to cleanup.
 
 safe_ls() {
     local dir="${1:-$PWD}"
@@ -31,16 +43,25 @@ f_header_text() {
     [[ -f "$CACHE_OMNISH_DIR/hidepreview" ]] && preview_status="${YELLOW}off${NC}"
     local marked_status="none"
     (( ${#marked_files[@]} > 0 )) && marked_status="${#marked_files[@]} marked"
-    cat <<EOF
-╭─ omnish v${OMNISH_VERSION} ─────────────╮
- Tab/⇧Tab: multi-select | ^H: help
- ?/F1: full help | F5: reload
- ^X: system menu | ^U: dua
- ^Y: copy | ^V: move | ^D: trash
- alt-u: undo | alt-t: trash-view
+
+    # [FIX layout 3] short terminals get a compact one-line header so the
+    # file list has room to breathe; tall terminals keep the boxed header.
+    local lines=${LINES:-0}
+    (( lines < 1 )) && lines=$(tput lines 2>/dev/null) && [[ -n "$lines" ]] || lines=24
+
+    if (( lines < 32 )); then
+        printf 'omnish v%s | ?: help | ^X: sys | ^D: trash | Preview: %s | Files: %s' \
+            "$OMNISH_VERSION" "$preview_status" "$marked_status"
+    else
+        cat <<EOF
+╭─ omnish v${OMNISH_VERSION} ─────────────────────────╮
+ Tab/⇧Tab: multi-select | ?/F1: help | F5: reload
+ ^X: system menu | ^U: dua | ^Y/^V: copy/move | ^D: trash
+ ^H: help pane | alt-u: undo | alt-t: trash-view
  Preview: $preview_status | Files: $marked_status
-╰────────────────────────────────────╯
+╰─────────────────────────────────────────────────────╯
 EOF
+    fi
 }
 
 mark() {
@@ -160,6 +181,17 @@ _ff_ensure_helpfile() {
     printf '%s' "$helpfile"
 }
 
+# ===============================================================
+# [FIX trap] Terminal restoration used by fzf_main traps.
+# Defined here (not in the entrypoint) so subcommands spawned by fzf
+# via `execute(...)` don't touch the parent terminal state.
+# ===============================================================
+_omnish_term_restore() {
+    [[ -t 1 ]] || return 0
+    tput cnorm 2>/dev/null || printf '\033[?25h' 2>/dev/null || true
+    tput rmcup 2>/dev/null || true
+}
+
 fzf_binds() {
     local path="$1"
     local header_text margin_preview dua_key helpfile
@@ -171,47 +203,59 @@ fzf_binds() {
     local hidepreview=''
     [[ -f "$CACHE_OMNISH_DIR/hidepreview" ]] && hidepreview=':hidden'
 
+    # [FIX layout 1] Neutralise FZF_DEFAULT_OPTS / FZF_DEFAULT_COMMAND so a
+    # shell-level `--height=30%` or custom default command can't shrink or
+    # hijack the file manager pane. We pass every option explicitly below.
+    # [FIX layout 2] --height=100% + --layout=reverse make the pane occupy
+    # the whole terminal with the prompt at the top — the standard file
+    # manager layout (ranger/lf/yazi/nnn). No trailing 2>&1 anymore: fzf
+    # warnings must not end up in $selected.
     local result
-    result=$(safe_ls "$path" | fzf --ansi --multi --no-bold \
-        --margin=0,2 \
-        --border \
-        --pointer='▶' \
-        --marker='✓' \
-        --header "$header_text" \
-        --prompt "omnish 🔍: " \
-        --bind 'tab:toggle+down' \
-        --bind 'shift-tab:toggle+up' \
-        --bind 'right:accept' \
-        --bind 'enter:accept' \
-        --bind 'left:top+up+accept' \
-        --bind 'ctrl-r,f5:top+accept' \
-        --bind "?:preview(cat \"$helpfile\" 2>/dev/null || echo 'help unavailable')" \
-        --bind "ctrl-h:change-preview(cat \"$helpfile\" 2>/dev/null || echo 'help unavailable')+show-preview" \
-        --bind "f1:execute(bash \"$SCRIPT_PATH\" --show-help {})" \
-        --bind "ctrl-x:execute(bash \"$SCRIPT_PATH\" --system-menu)+top+accept" \
-        --bind "ctrl-o:execute(bash \"$SCRIPT_PATH\" --xdg-open {})+top+accept" \
-        --bind "ctrl-v:execute(bash \"$SCRIPT_PATH\" --move-file {})+top+accept" \
-        --bind "ctrl-y:execute(bash \"$SCRIPT_PATH\" --copy-file {})+top+accept" \
-        --bind "alt-n:execute(bash \"$SCRIPT_PATH\" --create-file {})+top+accept" \
-        --bind "ctrl-n:execute(bash \"$SCRIPT_PATH\" --create-directory {})+top+accept" \
-        --bind "ctrl-s:execute(bash \"$SCRIPT_PATH\" --create-symlink {})+top+accept" \
-        --bind "ctrl-d,ctrl-e:execute(bash \"$SCRIPT_PATH\" --delete-file {})+top+accept" \
-        --bind "${dua_key}:execute(bash \"$SCRIPT_PATH\" --dua \"$PWD\")+top+accept" \
-        --bind "alt-u:execute(bash \"$SCRIPT_PATH\" --undo)+top+accept" \
-        --bind "alt-t:execute(bash \"$SCRIPT_PATH\" --trash-view)+top+accept" \
-        --bind "ctrl-g:execute({ [ ! -f \"$TMP_OMNISH_DIR/grep\" ] && bash \"$SCRIPT_PATH\" --search-term; } || rm -f \"$TMP_OMNISH_DIR/grep\")+top+accept" \
-        --bind "alt-a:toggle+execute-silent(bash \"$SCRIPT_PATH\" --mark-file {})" \
-        --bind "alt-x:select-all+execute-silent(bash \"$SCRIPT_PATH\" --mark-all-only)" \
-        --bind "ctrl-a:toggle-all+execute-silent(bash \"$SCRIPT_PATH\" --mark-all-toggle)" \
-        --bind "alt-h:execute-silent({ [ ! -f \"$CACHE_OMNISH_DIR/showhidden\" ] && touch \"$CACHE_OMNISH_DIR/showhidden\"; } || rm -f \"$CACHE_OMNISH_DIR/showhidden\")+top+accept" \
-        --bind "alt-l:execute-silent({ [ ! -f \"$CACHE_OMNISH_DIR/longfilemanager\" ] && touch \"$CACHE_OMNISH_DIR/longfilemanager\"; } || rm -f \"$CACHE_OMNISH_DIR/longfilemanager\")+top+accept" \
-        --bind "ctrl-p:toggle-preview+execute-silent({ [ ! -f \"$CACHE_OMNISH_DIR/hidepreview\" ] && touch \"$CACHE_OMNISH_DIR/hidepreview\"; } || rm -f \"$CACHE_OMNISH_DIR/hidepreview\")+top+accept" \
-        --bind "esc:execute(echo \"$PWD\" > \"$CACHE_OMNISH_DIR/last_folder\"; echo 130 > \"$TMP_OMNISH_DIR/signal\")+abort" \
-        --bind "ctrl-q:execute(echo \"$PWD\" > \"$CACHE_OMNISH_DIR/last_folder\"; echo 130 > \"$TMP_OMNISH_DIR/signal\")+abort" \
-        --bind "ctrl-c:execute(echo \"$PWD\" > \"$CACHE_OMNISH_DIR/last_folder\"; echo 130 > \"$TMP_OMNISH_DIR/signal\")+abort" \
-        --preview "bash \"$SCRIPT_PATH\" --preview-file \"$path/{}\"" \
-        --preview-window "right:${margin_preview}:noborder${hidepreview}" \
-        --expect=enter,right 2>&1)
+    result=$(safe_ls "$path" | \
+        FZF_DEFAULT_OPTS='' \
+        FZF_DEFAULT_COMMAND='' \
+        fzf --ansi --multi --no-bold \
+            --height=100% \
+            --layout=reverse \
+            --margin=0,2 \
+            --border \
+            --pointer='▶' \
+            --marker='✓' \
+            --header "$header_text" \
+            --prompt "omnish 🔍: " \
+            --bind 'tab:toggle+down' \
+            --bind 'shift-tab:toggle+up' \
+            --bind 'right:accept' \
+            --bind 'enter:accept' \
+            --bind 'left:top+up+accept' \
+            --bind 'ctrl-r,f5:top+accept' \
+            --bind "?:preview(cat \"$helpfile\" 2>/dev/null || echo 'help unavailable')" \
+            --bind "ctrl-h:change-preview(cat \"$helpfile\" 2>/dev/null || echo 'help unavailable')+show-preview" \
+            --bind "f1:execute(bash \"$SCRIPT_PATH\" --show-help {})" \
+            --bind "ctrl-x:execute(bash \"$SCRIPT_PATH\" --system-menu)+top+accept" \
+            --bind "ctrl-o:execute(bash \"$SCRIPT_PATH\" --xdg-open {})+top+accept" \
+            --bind "ctrl-v:execute(bash \"$SCRIPT_PATH\" --move-file {})+top+accept" \
+            --bind "ctrl-y:execute(bash \"$SCRIPT_PATH\" --copy-file {})+top+accept" \
+            --bind "alt-n:execute(bash \"$SCRIPT_PATH\" --create-file {})+top+accept" \
+            --bind "ctrl-n:execute(bash \"$SCRIPT_PATH\" --create-directory {})+top+accept" \
+            --bind "ctrl-s:execute(bash \"$SCRIPT_PATH\" --create-symlink {})+top+accept" \
+            --bind "ctrl-d,ctrl-e:execute(bash \"$SCRIPT_PATH\" --delete-file {})+top+accept" \
+            --bind "${dua_key}:execute(bash \"$SCRIPT_PATH\" --dua \"$PWD\")+top+accept" \
+            --bind "alt-u:execute(bash \"$SCRIPT_PATH\" --undo)+top+accept" \
+            --bind "alt-t:execute(bash \"$SCRIPT_PATH\" --trash-view)+top+accept" \
+            --bind "ctrl-g:execute({ [ ! -f \"$TMP_OMNISH_DIR/grep\" ] && bash \"$SCRIPT_PATH\" --search-term; } || rm -f \"$TMP_OMNISH_DIR/grep\")+top+accept" \
+            --bind "alt-a:toggle+execute-silent(bash \"$SCRIPT_PATH\" --mark-file {})" \
+            --bind "alt-x:select-all+execute-silent(bash \"$SCRIPT_PATH\" --mark-all-only)" \
+            --bind "ctrl-a:toggle-all+execute-silent(bash \"$SCRIPT_PATH\" --mark-all-toggle)" \
+            --bind "alt-h:execute-silent({ [ ! -f \"$CACHE_OMNISH_DIR/showhidden\" ] && touch \"$CACHE_OMNISH_DIR/showhidden\"; } || rm -f \"$CACHE_OMNISH_DIR/showhidden\")+top+accept" \
+            --bind "alt-l:execute-silent({ [ ! -f \"$CACHE_OMNISH_DIR/longfilemanager\" ] && touch \"$CACHE_OMNISH_DIR/longfilemanager\"; } || rm -f \"$CACHE_OMNISH_DIR/longfilemanager\")+top+accept" \
+            --bind "ctrl-p:toggle-preview+execute-silent({ [ ! -f \"$CACHE_OMNISH_DIR/hidepreview\" ] && touch \"$CACHE_OMNISH_DIR/hidepreview\"; } || rm -f \"$CACHE_OMNISH_DIR/hidepreview\")+top+accept" \
+            --bind "esc:execute(echo \"$PWD\" > \"$CACHE_OMNISH_DIR/last_folder\"; echo 130 > \"$TMP_OMNISH_DIR/signal\")+abort" \
+            --bind "ctrl-q:execute(echo \"$PWD\" > \"$CACHE_OMNISH_DIR/last_folder\"; echo 130 > \"$TMP_OMNISH_DIR/signal\")+abort" \
+            --bind "ctrl-c:execute(echo \"$PWD\" > \"$CACHE_OMNISH_DIR/last_folder\"; echo 130 > \"$TMP_OMNISH_DIR/signal\")+abort" \
+            --preview "bash \"$SCRIPT_PATH\" --preview-file \"$path/{}\"" \
+            --preview-window "right:${margin_preview}:noborder${hidepreview}" \
+            --expect=enter,right)
 
     selected=$(clean_path "$result" | sed 's|^\./||g')
     if [[ -f "$TMP_OMNISH_DIR/signal" ]]; then
@@ -260,11 +304,16 @@ fzf_main() {
     builtin cd "$target" || exit 1
     add_to_history "$PWD"
 
-    # [FIX Bug 1+2] install the trap HERE (not in 10-utils.sh at module scope),
-    # and make INT/TERM actually exit the shell.
-    trap 'cleanup' EXIT
-    trap 'cleanup; exit 130' INT
-    trap 'cleanup; exit 143' TERM
+    # [FIX trap] The EXIT trap now also restores the terminal (cursor +
+    # alt-screen) so a crash cannot leave the user's terminal unusable.
+    # INT/TERM only call `exit`; the EXIT trap does the actual cleanup
+    # exactly once (avoids double-cleanup of $TMP_OMNISH_DIR).
+    # This trap lives here — NOT in the entrypoint — because subcommands
+    # invoked by fzf via `execute(...)` (--mark-file, --copy-file, etc.)
+    # must not touch the parent terminal or wipe $TMP_OMNISH_DIR.
+    trap 'cleanup; _omnish_term_restore' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
 
     local key sel raw_sel mark_lines
     while :; do
