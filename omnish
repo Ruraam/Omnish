@@ -15,14 +15,32 @@ trap "" SIGTSTP
 
 # --- Resolve own path robustly (symlink-safe, POSIX-portable) ---
 _omnish_resolve_self() {
-    local src="${BASH_SOURCE[0]}"
+    local src="${1:-${BASH_SOURCE[0]}}"
+    local dir base
+
+    # Resolve each symlink relative to the directory containing that link.
     while [[ -L "$src" ]]; do
-        local dir
-        dir=$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd -P)
-        src=$(readlink "$src") || break
-        [[ "$src" != /* ]] && src="$dir/$src"
+        case "$src" in
+            */*) dir="${src%/*}"; [[ -n "$dir" ]] || dir="/" ;;
+            *)   dir="." ;;
+        esac
+
+        dir=$(cd -P -- "$dir" >/dev/null 2>&1 && pwd -P) || return 1
+        src=$(readlink "$src") || return 1
+        [[ "$src" == /* ]] || src="$dir/$src"
     done
-    (cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd -P)/$(basename "$src")
+
+    case "$src" in
+        */*) dir="${src%/*}"; base="${src##*/}"; [[ -n "$dir" ]] || dir="/" ;;
+        *)   dir="."; base="$src" ;;
+    esac
+
+    dir=$(cd -P -- "$dir" >/dev/null 2>&1 && pwd -P) || return 1
+    if [[ "$dir" == "/" ]]; then
+        printf '/%s\n' "$base"
+    else
+        printf '%s/%s\n' "$dir" "$base"
+    fi
 }
 SELF="$(_omnish_resolve_self)"
 
