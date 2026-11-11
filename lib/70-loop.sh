@@ -78,6 +78,7 @@ loop_rebuild_visual_marks() {
         real=$(_loop_mark_identity "${loop_list[i]}") || continue
         [[ -n "${mark_set[$real]:-}" ]] && loop_marks[$i]="${loop_list[i]}"
     done
+    return 0
 }
 
 # ===============================================================
