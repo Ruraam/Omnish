@@ -16,27 +16,27 @@ clean_path() {
 # Backend-neutral single-choice menu. fzf keeps fuzzy selection; loop mode
 # provides arrow-key navigation with the same Enter/Esc interaction.
 _omnish_select() {
-    local header="\${1:-Select}" line choice i key seq saved_stty selected=0
+    local header="${1:-Select}" line choice i key seq saved_stty selected=0
     local -a options=()
     while IFS= read -r line; do options+=("$line"); done
 
-    (( \${#options[@]} > 0 )) || return 1
-    if [[ "\${OMNISH_BACKEND:-auto}" == "fzf" ]] && command -v fzf >/dev/null 2>&1; then
-        printf '%s\n' "\${options[@]}" | fzf --no-sort --no-info --header "$header"
+    (( ${#options[@]} > 0 )) || return 1
+    if [[ "${OMNISH_BACKEND:-auto}" == "fzf" ]] && command -v fzf >/dev/null 2>&1; then
+        printf '%s\n' "${options[@]}" | fzf --no-sort --no-info --header "$header"
         return $?
     fi
 
     # Keep a numeric fallback for callers without a usable interactive TTY.
     if [[ ! -r /dev/tty || ! -w /dev/tty ]] || ! saved_stty=$(stty -g </dev/tty 2>/dev/null); then
         printf '%s\n' "$header" >&2
-        for i in "\${!options[@]}"; do
-            printf ' %2d) %s\n' "$((i + 1))" "\${options[i]}" >&2
+        for i in "${!options[@]}"; do
+            printf ' %2d) %s\n' "$((i + 1))" "${options[i]}" >&2
         done
         printf 'Select a number (Enter to cancel): ' >&2
         IFS= read -r choice </dev/tty || return 1
         [[ "$choice" =~ ^[0-9]+$ ]] || return 1
-        (( choice >= 1 && choice <= \${#options[@]} )) || return 1
-        printf '%s\n' "\${options[choice - 1]}"
+        (( choice >= 1 && choice <= ${#options[@]} )) || return 1
+        printf '%s\n' "${options[choice - 1]}"
         return 0
     fi
 
@@ -46,11 +46,11 @@ _omnish_select() {
 
     while :; do
         printf '\033[H\033[2J%s\n\n' "$header" >&2
-        for i in "\${!options[@]}"; do
+        for i in "${!options[@]}"; do
             if (( i == selected )); then
-                printf ' \033[7m > %2d) %s \033[0m\n' "$((i + 1))" "\${options[i]}" >&2
+                printf ' \033[7m > %2d) %s \033[0m\n' "$((i + 1))" "${options[i]}" >&2
             else
-                printf '   %2d) %s\n' "$((i + 1))" "\${options[i]}" >&2
+                printf '   %2d) %s\n' "$((i + 1))" "${options[i]}" >&2
             fi
         done
         printf '\nUp/Down or j/k: move   Enter: select   Esc/q: back\n' >&2
@@ -66,9 +66,9 @@ _omnish_select() {
                         IFS= read -rsn1 -t 0.05 key </dev/tty 2>/dev/null || :
                         case "$key" in
                             A) (( selected > 0 )) && ((selected--)) ;;
-                            B) (( selected + 1 < \${#options[@]} )) && ((selected++)) ;;
+                            B) (( selected + 1 < ${#options[@]} )) && ((selected++)) ;;
                             H) selected=0 ;;
-                            F) selected=$(($\{#options[@]} - 1)) ;;
+                            F) selected=$((${#options[@]} - 1)) ;;
                         esac
                     fi
                 else
@@ -76,9 +76,9 @@ _omnish_select() {
                 fi
                 ;;
             k|K) (( selected > 0 )) && ((selected--)) ;;
-            j|J) (( selected + 1 < \${#options[@]} )) && ((selected++)) ;;
+            j|J) (( selected + 1 < ${#options[@]} )) && ((selected++)) ;;
             $'\r'|$'\n')
-                choice="\${options[selected]}"
+                choice="${options[selected]}"
                 stty "$saved_stty" </dev/tty 2>/dev/null || :
                 printf '\033[?25h\033[0m\n' >&2
                 printf '%s\n' "$choice"
@@ -87,8 +87,8 @@ _omnish_select() {
             q|Q) break ;;
             [1-9])
                 i=$((10#$key - 1))
-                if (( i < \${#options[@]} )); then
-                    choice="\${options[i]}"
+                if (( i < ${#options[@]} )); then
+                    choice="${options[i]}"
                     stty "$saved_stty" </dev/tty 2>/dev/null || :
                     printf '\033[?25h\033[0m\n' >&2
                     printf '%s\n' "$choice"
