@@ -168,7 +168,9 @@ cleanup() {
     fi
 
     # Restore terminal
-    printf '\e[?25h\e[0m' 2>/dev/null || true
+    if [[ -t 0 || -t 1 || -t 2 ]]; then
+        printf '\e[?25h\e[0m' >/dev/tty 2>/dev/null || true
+    fi
     stty sane </dev/tty 2>/dev/null || true
     return 0
 }
