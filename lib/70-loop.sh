@@ -485,7 +485,7 @@ loop_mark_all_toggle() {
     local -a current_reals=() i real
     for (( i=0; i<=loop_total; i++ )); do
         [[ "${loop_list[i]}" == "empty" ]] && continue
-        real=$(realpath "${loop_list[i]}" 2>/dev/null) || real="${loop_list[i]}"
+        real=$(_loop_mark_identity "${loop_list[i]}")
         current_reals+=("$real")
     done
 
