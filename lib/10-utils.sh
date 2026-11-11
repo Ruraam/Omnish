@@ -129,13 +129,26 @@ get_term_size() {
 # Drain bytes already queued on the controlling terminal. This prevents
 # partial escape sequences or type-ahead from leaking into the parent shell.
 _omnish_flush_tty_input() {
-    local tty_fd pending=''
+    local tty_fd pending='' saved_tty
     if ! { exec {tty_fd}<>/dev/tty; } 2>/dev/null; then
         return 0
     fi
+
+    saved_tty=$(stty -g <&"$tty_fd" 2>/dev/null) || {
+        exec {tty_fd}>&-
+        return 0
+    }
+    # read -t 0 cannot see bytes held by canonical line discipline. Switch
+    # briefly to noncanonical mode, drain the pending input queue, then put
+    # the exact previous termios state back.
+    stty -icanon -echo min 1 time 0 <&"$tty_fd" 2>/dev/null || {
+        exec {tty_fd}>&-
+        return 0
+    }
     while IFS= read -rsn 1 -t 0 -u "$tty_fd" pending 2>/dev/null; do
         pending=''
     done
+    stty "$saved_tty" <&"$tty_fd" 2>/dev/null || true
     exec {tty_fd}>&-
     return 0
 }
