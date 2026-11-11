@@ -121,7 +121,7 @@ loop_read_dir() {
 
     loop_list=("${dirs[@]}" "${files[@]}")
     [[ ${#loop_list[@]} -eq 0 ]] && loop_list=("empty")
-    ((loop_total=${#loop_list[@]}-1))
+    loop_total=$(( ${#loop_list[@]} - 1 ))
     loop_prev_idx=$prev_idx
     return 0
 }
@@ -295,7 +295,7 @@ loop_handle_key() {
     case "$k" in
         # === Navigation ===
         j|DOWN)  (( loop_scroll < loop_total )) && (( loop_scroll+=1 )) ; loop_show_help=0 ; loop_draw ;;
-        k|UP)    (( loop_scroll > 0 )) && (( loop_scroll-=1 )) ; loop_show_help=0 ; loop_draw ;;
+        k|UP)    (( loop_scroll > 0 )) && loop_scroll=$(( loop_scroll - 1 )) ; loop_show_help=0 ; loop_draw ;;
         g)       loop_scroll=0 ; loop_show_help=0 ; loop_draw ;;
         G)       loop_scroll=$loop_total ; loop_show_help=0 ; loop_draw ;;
         l|RIGHT|'')  loop_open_selected ;;
@@ -665,7 +665,7 @@ loop_search() {
     done
     if (( ${#filtered[@]} > 0 )); then
         loop_list=("${filtered[@]}")
-        (( loop_total=${#loop_list[@]}-1 ))
+        loop_total=$(( ${#loop_list[@]} - 1 ))
         loop_scroll=0
     fi
     loop_draw
