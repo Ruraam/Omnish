@@ -261,61 +261,25 @@ printf 'hidden\n' > "$WORK/loop-list/.hidden-file"
 
 # Tab, Space and Shift-Tab must mutate the same persistent mark set.
 mkdir -p -- "$WORK/loop-select"
-printf 'one\n' > "$WORK/loop-select/one.txt"
-printf 'two\n' > "$WORK/loop-select/two.txt"
+printf "one\n" > "$WORK/loop-select/one.txt"
+printf "two\n" > "$WORK/loop-select/two.txt"
 loop_list=("$WORK/loop-select/one.txt" "$WORK/loop-select/two.txt")
 loop_total=1
 loop_scroll=0
 marked_files=()
 loop_draw() { :; }
+tab_key=$(printf '\\011')
 sync_marked_files
-set -x
-loop_handle_key 
-[[ "${#marked_files[@]}" -eq 1 && "${marked_files[0]}" == "$WORK/loop-select/one.txt" ]] \
-    || fail "loop Tab did not persist the current selection"
+loop_handle_key "$tab_key"
+[[ "${#marked_files[@]}" -eq 1 && "${marked_files[0]}" == "$WORK/loop-select/one.txt" ]] || fail "loop Tab did not persist the current selection"
 [[ "$loop_scroll" -eq 1 ]] || fail "loop Tab did not advance to the next entry"
 loop_handle_key ' '
 [[ "${#marked_files[@]}" -eq 2 ]] || fail "loop Space did not add the current selection"
 loop_handle_key SHIFT_TAB
-[[ "${#marked_files[@]}" -eq 1 && "${marked_files[0]}" == "$WORK/loop-select/one.txt" ]] \
-    || fail "loop Shift-Tab did not toggle the current selection off"
-grep -Fq -- "tab:toggle+down+execute-silent" "$ROOT/lib/70-fzf.sh" \
-    || fail "fzf Tab is not synchronized with persistent marks"
-grep -Fq -- "shift-tab:toggle+up+execute-silent" "$ROOT/lib/70-fzf.sh" \
-    || fail "fzf Shift-Tab is not synchronized with persistent marks"
-grep -Fq -- "space:toggle+execute-silent" "$ROOT/lib/70-fzf.sh" \
-    || fail "fzf Space is not synchronized with persistent marks"
-set +x
-
-# SIGWINCH is deferred to the main loop; the trap itself never draws.
-resize_draws=0
-resize_size_reads=0
-get_term_size() { ((resize_size_reads+=1)); LINES=40; COLUMNS=120; }
-loop_draw() { ((resize_draws+=1)); }
-loop_resize_pending=0
-loop_process_resize
-[[ "$resize_draws" -eq 0 && "$resize_size_reads" -eq 0 ]] || fail "loop processed a resize without a pending SIGWINCH"
-loop_resize_pending=1
-loop_process_resize
-[[ "$resize_draws" -eq 1 && "$resize_size_reads" -eq 1 ]] || fail "loop did not process a deferred SIGWINCH"
-[[ "$loop_resize_pending" -eq 0 ]] || fail "loop did not clear the pending resize flag"
-
-printf 'PASS: runtime ownership, file-operation guards and trash restore regressions\n'
-\t'
-[[ "${#marked_files[@]}" -eq 1 && "${marked_files[0]}" == "$WORK/loop-select/one.txt" ]] \
-    || fail "loop Tab did not persist the current selection"
-[[ "$loop_scroll" -eq 1 ]] || fail "loop Tab did not advance to the next entry"
-loop_handle_key ' '
-[[ "${#marked_files[@]}" -eq 2 ]] || fail "loop Space did not add the current selection"
-loop_handle_key SHIFT_TAB
-[[ "${#marked_files[@]}" -eq 1 && "${marked_files[0]}" == "$WORK/loop-select/one.txt" ]] \
-    || fail "loop Shift-Tab did not toggle the current selection off"
-grep -Fq -- "tab:toggle+down+execute-silent" "$ROOT/lib/70-fzf.sh" \
-    || fail "fzf Tab is not synchronized with persistent marks"
-grep -Fq -- "shift-tab:toggle+up+execute-silent" "$ROOT/lib/70-fzf.sh" \
-    || fail "fzf Shift-Tab is not synchronized with persistent marks"
-grep -Fq -- "space:toggle+execute-silent" "$ROOT/lib/70-fzf.sh" \
-    || fail "fzf Space is not synchronized with persistent marks"
+[[ "${#marked_files[@]}" -eq 1 && "${marked_files[0]}" == "$WORK/loop-select/one.txt" ]] || fail "loop Shift-Tab did not toggle the current selection off"
+grep -Fq -- "tab:toggle+down+execute-silent" "$ROOT/lib/70-fzf.sh" || fail "fzf Tab is not synchronized with persistent marks"
+grep -Fq -- "shift-tab:toggle+up+execute-silent" "$ROOT/lib/70-fzf.sh" || fail "fzf Shift-Tab is not synchronized with persistent marks"
+grep -Fq -- "space:toggle+execute-silent" "$ROOT/lib/70-fzf.sh" || fail "fzf Space is not synchronized with persistent marks"
 
 # SIGWINCH is deferred to the main loop; the trap itself never draws.
 resize_draws=0
