@@ -19,12 +19,12 @@
 # ===============================================================
 loop_setup_terminal() {
     printf '\e[?1049h\e[?7l\e[?25l\e[2J'
-    stty -echo </dev/tty 2>/dev/null
+    stty -echo -icanon min 1 time 0 </dev/tty 2>/dev/null
 }
 
 loop_reset_terminal() {
     printf '\e[?7h\e[?25h\e[2J\e[;r\e[?1049l'
-    stty echo </dev/tty 2>/dev/null
+    stty sane </dev/tty 2>/dev/null
 }
 
 loop_clear_scroll() {
