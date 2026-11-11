@@ -112,7 +112,7 @@ loop_read_dir() {
         if [[ -d "$item" ]]; then
             dirs+=("$item")
             [[ "$item" == "$OLDPWD" ]] && prev_idx=$idx
-            ((idx++))
+            ((idx+=1))
         else
             files+=("$item")
         fi
