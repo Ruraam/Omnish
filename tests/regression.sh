@@ -268,7 +268,7 @@ loop_total=1
 loop_scroll=0
 marked_files=()
 loop_draw() { :; }
-tab_key=$(printf '\\011')
+tab_key=$(printf '\011')
 sync_marked_files
 loop_handle_key "$tab_key"
 [[ "${#marked_files[@]}" -eq 1 && "${marked_files[0]}" == "$WORK/loop-select/one.txt" ]] || fail "loop Tab did not persist the current selection"
