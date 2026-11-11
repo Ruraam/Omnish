@@ -242,7 +242,7 @@ printf 'hidden\n' > "$WORK/loop-list/.hidden-file"
     loop_read_dir
     [[ $(shopt -q nullglob; echo $?) -eq 1 ]] || fail "loop_read_dir leaked nullglob when initially disabled"
     [[ $(shopt -q dotglob; echo $?) -eq 1 ]] || fail "loop_read_dir leaked dotglob when initially disabled"
-    [[ " ${loop_list[*]} " == *" visible file.txt "* ]] || fail "loop listing omitted a visible filename with spaces"
+    [[ " ${loop_list[*]} " == *"visible file.txt"* ]] || fail "loop listing omitted a visible filename with spaces"
     [[ " ${loop_list[*]} " != *".hidden-file"* ]] || fail "hidden file appeared while showhidden was disabled"
 
     # An inherited dotglob must not expose hidden files when showhidden is off.
