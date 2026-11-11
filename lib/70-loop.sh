@@ -313,7 +313,7 @@ loop_handle_key() {
                  ;;
         SHIFT_TAB)
                  loop_mark_current_silent
-                 (( loop_scroll > 0 )) && (( loop_scroll-=1 ))
+                 (( loop_scroll > 0 )) && loop_scroll=$(( loop_scroll - 1 ))
                  loop_show_help=0
                  loop_draw
                  ;;
