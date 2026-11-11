@@ -229,4 +229,33 @@ fi
 [[ -z "$(find "$OMNI_TRASH" -mindepth 1 -print -quit)" ]] \
     || fail "empty_trash left entries behind"
 
+
+# The loop backend must not leak shell glob options into its caller.
+source "$ROOT/lib/70-loop.sh"
+mkdir -p -- "$WORK/loop-list/visible-dir" "$WORK/loop-list/dir with spaces"
+printf 'visible\n' > "$WORK/loop-list/visible file.txt"
+printf 'hidden\n' > "$WORK/loop-list/.hidden-file"
+(
+    cd -- "$WORK/loop-list"
+    rm -f -- "$CACHE_OMNISH_DIR/showhidden"
+    shopt -u nullglob dotglob
+    loop_read_dir
+    [[ $(shopt -q nullglob; echo $?) -eq 1 ]] || fail "loop_read_dir leaked nullglob when initially disabled"
+    [[ $(shopt -q dotglob; echo $?) -eq 1 ]] || fail "loop_read_dir leaked dotglob when initially disabled"
+    [[ " ${loop_list[*]} " == *" visible file.txt "* ]] || fail "loop listing omitted a visible filename with spaces"
+    [[ " ${loop_list[*]} " != *".hidden-file"* ]] || fail "hidden file appeared while showhidden was disabled"
+
+    # An inherited dotglob must not expose hidden files when showhidden is off.
+    shopt -s nullglob dotglob
+    loop_read_dir
+    [[ $(shopt -q nullglob; echo $?) -eq 0 ]] || fail "loop_read_dir disabled caller's nullglob"
+    [[ $(shopt -q dotglob; echo $?) -eq 0 ]] || fail "loop_read_dir disabled caller's dotglob"
+    [[ " ${loop_list[*]} " != *".hidden-file"* ]] || fail "inherited dotglob bypassed showhidden setting"
+
+    touch "$CACHE_OMNISH_DIR/showhidden"
+    loop_read_dir
+    [[ " ${loop_list[*]} " == *".hidden-file"* ]] || fail "showhidden did not include hidden entries"
+    shopt -u nullglob dotglob
+)
+
 printf 'PASS: runtime ownership, file-operation guards and trash restore regressions\n'
