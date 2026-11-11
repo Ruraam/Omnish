@@ -196,7 +196,7 @@ fzf_binds() {
     local path="$1"
     local header_text margin_preview dua_key helpfile
     header_text=$(f_header_text)
-    margin_preview=$(cat "$MARGIN_PREVIEW" 2>/dev/null || echo 60)
+    margin_preview="${OMNISH_PREVIEW_WIDTH:-$(cat "$MARGIN_PREVIEW" 2>/dev/null || echo 60)}"
     dua_key="ctrl-u"
     helpfile="$(_ff_ensure_helpfile)"
 
