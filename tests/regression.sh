@@ -83,4 +83,51 @@ undo_trash
     [[ ! -e "$owned_runtime" ]]
 )
 
+
+# Exercise user-facing file operations with deterministic prompt/progress mocks.
+cmd_line() { cmd_reply="${TEST_CMD_REPLY:-}"; }
+cmd_yes_no() { cmd_reply=yes; }
+messages() { :; }
+progress_begin() { :; }
+progress_set() { :; }
+progress_end() { :; }
+
+mkdir -p -- "$WORK/op-source" "$WORK/op-dest"
+printf 'copy payload\n' > "$WORK/op-source/file with spaces.txt"
+(
+    cd -- "$WORK/op-dest"
+    export TEST_CMD_REPLY="copied file.txt"
+    copy_file "$WORK/op-source/file with spaces.txt"
+)
+[[ "$(cat "$WORK/op-dest/copied file.txt")" == "copy payload" ]] \
+    || fail "copy_file did not preserve a spaced source path"
+
+(
+    cd -- "$WORK/op-dest"
+    export TEST_CMD_REPLY="moved file.txt"
+    move_file "$WORK/op-source/file with spaces.txt"
+)
+[[ ! -e "$WORK/op-source/file with spaces.txt" ]] || fail "move_file left the source behind"
+[[ "$(cat "$WORK/op-dest/moved file.txt")" == "copy payload" ]] \
+    || fail "move_file did not preserve file contents"
+
+(
+    cd -- "$WORK/op-dest"
+    export TEST_CMD_REPLY="created directory"
+    create_directory
+    export TEST_CMD_REPLY="created file.txt"
+    create_file
+)
+[[ -d "$WORK/op-dest/created directory" ]] || fail "create_directory failed"
+[[ -f "$WORK/op-dest/created file.txt" ]] || fail "create_file failed"
+
+(
+    cd -- "$WORK/op-dest"
+    export TEST_CMD_REPLY="created link"
+    create_symlink "$WORK/op-dest/moved file.txt"
+)
+[[ -L "$WORK/op-dest/created link" ]] || fail "create_symlink did not create a link"
+[[ "$(readlink -- "$WORK/op-dest/created link")" == "$WORK/op-dest/moved file.txt" ]] \
+    || fail "create_symlink target was not preserved"
+
 printf 'PASS: runtime ownership, file-operation guards and trash restore regressions\n'
