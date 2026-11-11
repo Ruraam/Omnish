@@ -59,19 +59,14 @@ delete_file() {
         (( ${#marked_files[@]} == 0 )) && { status_msg "no files marked"; return; }
         cmd_yes_no "Trash ${#marked_files[@]} item(s)?"
         [[ $cmd_reply == yes ]] || { status_msg "cancelled"; return; }
-        local failed=0 f total
-        total=${#marked_files[@]}
-        (( total > 3 )) && spinner_begin "trashing $total item(s)"
-        for f in "${marked_files[@]}"; do
-            delete "$f" 2>/dev/null || ((failed++))
-        done
-        (( total > 3 )) && spinner_end
-        # [FIX 5] only clear marks on full success
-        if (( failed == 0 )); then
+        local total=${#marked_files[@]}
+        # Pass the complete selection to trash() so it becomes one undo batch,
+        # rather than creating one independent batch per selected file.
+        if trash "${marked_files[@]}"; then
             generate_mark_file
             status_msg "trashed $total item(s)"
         else
-            status_msg "$failed of $total failed (marks kept)"
+            status_msg "some items could not be trashed (marks kept)"
         fi
     }
 
