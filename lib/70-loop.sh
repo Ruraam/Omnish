@@ -766,7 +766,7 @@ loop_main() {
 
     # [FIX 1] INT/TERM must exit; EXIT fires on natural exit
     loop_resize_pending=0
-    trap 'loop_reset_terminal; cleanup; loop_flush_input; exec {OMNISH_TTY_FD}>&-' EXIT
+    trap 'loop_reset_terminal; cleanup; exec {OMNISH_TTY_FD}>&-' EXIT
     trap 'exit 130' INT
     trap 'exit 143' TERM
     trap 'loop_resize_pending=1' WINCH
