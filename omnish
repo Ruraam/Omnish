@@ -15,16 +15,14 @@ trap "" SIGTSTP
 
 # --- Resolve own path robustly (symlink-safe, POSIX-portable) ---
 _omnish_resolve_self() {
-    local src="${BASH_SOURCE[0]}"
+    local src="\${BASH_SOURCE[0]}" dir
     while [[ -L "$src" ]]; do
-        local dir
-        dir=$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd -P)
+        dir=$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd -P) || return 1
         src=$(readlink "$src") || break
         [[ "$src" != /* ]] && src="$dir/$src"
     done
-    local dir
     dir=$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd -P) || return 1
-    printf '%s/%s\\n' "$dir" "$(basename -- "$src")"
+    printf '%s/%s\n' "$dir" "$(basename -- "$src")"
 }
 SELF="$(_omnish_resolve_self)"
 
