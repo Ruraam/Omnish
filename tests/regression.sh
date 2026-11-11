@@ -270,7 +270,9 @@ marked_files=()
 loop_draw() { :; }
 tab_key=$(printf '\011')
 sync_marked_files
+set -x
 loop_handle_key "$tab_key"
+set +x
 [[ "${#marked_files[@]}" -eq 1 && "${marked_files[0]}" == "$WORK/loop-select/one.txt" ]] || fail "loop Tab did not persist the current selection (key=$(printf \"%q\" \"$tab_key\"), count=${#marked_files[@]}, first=${marked_files[0]:-none})"
 [[ "$loop_scroll" -eq 1 ]] || fail "loop Tab did not advance to the next entry"
 loop_handle_key ' '
