@@ -20,21 +20,21 @@ _omnish_select() {
     local -a options=()
     while IFS= read -r line; do options+=("$line"); done
 
-    (("${#options[@]}")) || return 1
+    (( ${#options[@]} > 0 )) || return 1
     if [[ "${OMNISH_BACKEND:-auto}" == "fzf" ]] && command -v fzf >/dev/null 2>&1; then
-        printf '%s\\n' "${options[@]}" | fzf --no-sort --no-info --header "$header"
+        printf '%s\n' "${options[@]}" | fzf --no-sort --no-info --header "$header"
         return $?
     fi
 
-    printf '%s\\n' "$header" >&2
+    printf '%s\n' "$header" >&2
     for i in "${!options[@]}"; do
-        printf ' %2d) %s\\n' "$((i + 1))" "${options[i]}" >&2
+        printf ' %2d) %s\n' "$((i + 1))" "${options[i]}" >&2
     done
     printf 'Select a number (Enter to cancel): ' >&2
     IFS= read -r choice </dev/tty || return 1
     [[ "$choice" =~ ^[0-9]+$ ]] || return 1
     (( choice >= 1 && choice <= ${#options[@]} )) || return 1
-    printf '%s\\n' "${options[choice - 1]}"
+    printf '%s\n' "${options[choice - 1]}"
 }
 
 _human_size() {
