@@ -65,7 +65,9 @@ printf 'CHILD-START\\n'
 source "$OMNISH_TEST_ROOT/lib/00-config.sh"
 printf 'CONFIG-LOADED\\n'
 source "$OMNISH_TEST_ROOT/lib/10-utils.sh"
+printf 'UTILS-LOADED\\n'
 source "$OMNISH_TEST_ROOT/lib/70-loop.sh"
+printf 'LOOP-LOADED\\n'
 loop_read_dir() { loop_list=("fixture"); loop_total=0; loop_prev_idx=0; }
 loop_rebuild_visual_marks() { :; }
 loop_draw() {
