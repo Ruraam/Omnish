@@ -54,6 +54,7 @@ loop_reload_marks_from_disk() {
     marked_files=()
     [[ -f "$MARKED_FILES_FILE" ]] && mapfile -t marked_files < "$MARKED_FILES_FILE" 2>/dev/null
     ((${#marked_files[@]})) && [[ -z "${marked_files[0]}" ]] && marked_files=()
+    return 0
 }
 
 # Keep symlinks as independently markable entries; canonicalize other paths.
