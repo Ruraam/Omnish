@@ -19,12 +19,12 @@
 # ===============================================================
 loop_setup_terminal() {
     printf '\e[?1049h\e[?7l\e[?25l\e[2J'
-    stty -echo 2>/dev/null
+    stty -echo </dev/tty 2>/dev/null
 }
 
 loop_reset_terminal() {
     printf '\e[?7h\e[?25h\e[2J\e[;r\e[?1049l'
-    stty echo 2>/dev/null
+    stty echo </dev/tty 2>/dev/null
 }
 
 loop_clear_scroll() {
@@ -269,9 +269,9 @@ loop_handle_key() {
 
     if [[ "$k" == $'\e' ]]; then
         local c1='' c2=''
-        if IFS= read -rsn 1 -t 0.05 c1 2>/dev/null; then
+        if IFS= read -rsn 1 -t 0.08 -u "$OMNISH_TTY_FD" c1 2>/dev/null; then
             if [[ "$c1" == '[' || "$c1" == 'O' ]]; then
-                if IFS= read -rsn 1 -t 0.05 c2 2>/dev/null; then
+                if IFS= read -rsn 1 -t 0.08 -u "$OMNISH_TTY_FD" c2 2>/dev/null; then
                     case "${c1}${c2}" in
                         '[A'|'OA') k='UP' ;;
                         '[B'|'OB') k='DOWN' ;;
@@ -648,7 +648,7 @@ loop_search() {
     loop_show_cursor
     printf '\e[%s;1H\e[K/' "$LINES"
     local query='' ch
-    while IFS= read -rsn 1 -t 2 ch; do
+    while IFS= read -rsn 1 -t 2 -u "$OMNISH_TTY_FD" ch; do
         case "$ch" in
             $'\e'|'') break ;;
             $'\177'|$'\b') query="${query%?}" ;;
@@ -683,7 +683,7 @@ loop_stat_current() {
     [[ -z "$entry" || "$entry" == "empty" ]] && return
     loop_reset_terminal
     stat -- "$entry" 2>/dev/null || ls -la -- "$entry"
-    read -rsn 1 -p "Press any key…"
+    read -rsn 1 -u "$OMNISH_TTY_FD" -p "Press any key…"
     loop_setup_terminal
     loop_show_help=0
     loop_draw
@@ -718,8 +718,31 @@ loop_go_dir() {
 # [FIX 2] fatal errors go to /dev/tty
 # [FIX 9] reload marked_files from disk at start
 # ===============================================================
+loop_flush_input() {
+    [[ -n "${OMNISH_TTY_FD:-}" ]] || return 0
+    local pending=""
+    while IFS= read -rsn 1 -t 0 -u "$OMNISH_TTY_FD" pending 2>/dev/null; do
+        pending=""
+    done
+    return 0
+}
+
+loop_process_resize() {
+    (( ${loop_resize_pending:-0} )) || return 0
+    loop_resize_pending=0
+    get_term_size
+    loop_draw
+    return 0
+}
+
 loop_main() {
     local target="${1:-$PWD}"
+    local OMNISH_TTY_FD
+
+    if [[ ! -r /dev/tty || ! -w /dev/tty ]] || ! exec {OMNISH_TTY_FD}<>/dev/tty; then
+        printf "omnish: interactive loop backend requires a controlling TTY\\n" >&2
+        exit 1
+    fi
 
     if [[ ! -d "$target" ]]; then
         printf 'omnish: %s: not a directory\n' "$target" >/dev/tty 2>/dev/null || \
@@ -742,10 +765,11 @@ loop_main() {
     loop_reload_marks_from_disk
 
     # [FIX 1] INT/TERM must exit; EXIT fires on natural exit
-    trap 'loop_reset_terminal; cleanup' EXIT
-    trap 'loop_reset_terminal; cleanup; exit 130' INT
-    trap 'loop_reset_terminal; cleanup; exit 143' TERM
-    trap 'get_term_size; loop_draw' WINCH
+    loop_resize_pending=0
+    trap 'loop_reset_terminal; cleanup; loop_flush_input; exec {OMNISH_TTY_FD}>&-' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    trap 'loop_resize_pending=1' WINCH
 
     loop_setup_terminal
     loop_read_dir
@@ -754,8 +778,8 @@ loop_main() {
 
     local k
     while :; do
-        IFS= read -rsn 1 -t 0.05 k 2>/dev/null || { [[ -t 1 ]] || exit 1; continue; }
-        [[ -t 1 ]] || exit 1
+        loop_process_resize
+        IFS= read -rsn 1 -t 0.05 -u "$OMNISH_TTY_FD" k 2>/dev/null || continue
         loop_handle_key "$k"
     done
 }
