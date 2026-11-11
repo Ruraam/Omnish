@@ -38,7 +38,7 @@ _fileops_has_duplicate_basenames \
 if _fileops_has_duplicate_basenames "$WORK/source-a/one.txt" "$WORK/source-b/two.txt"; then
     fail "distinct basenames were incorrectly rejected"
 fi
-if _fileops_has_duplicate_basenames "$WORK/source-a/one" "$WORK/source-b/one/"; then
+if _fileops_has_duplicate_basenames "$WORK/source-a/one" "$WORK/source-b/dir/one"; then
     fail "different path basenames were incorrectly accepted as distinct"
 fi
 
