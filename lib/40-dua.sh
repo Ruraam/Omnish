@@ -330,7 +330,7 @@ _dua_interactive() {
             fzf --ansi --delimiter=$'\t' --with-nth=1 --no-sort \
                 --expect=ctrl-h,ctrl-d,ctrl-e,ctrl-o,ctrl-r,ctrl-t,alt-d,alt-D,esc \
                 --header "$header" \
-                --preview "bash \"$SCRIPT_PATH\" --dua-preview {2}" \
+                --preview 'bash "$OMNISH_ENTRYPOINT" --dua-preview {2}' \
                 --preview-window "right:${preview_w}:wrap" \
                 < "$listfile"
         ); then
