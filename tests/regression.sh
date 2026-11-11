@@ -258,4 +258,18 @@ printf 'hidden\n' > "$WORK/loop-list/.hidden-file"
     shopt -u nullglob dotglob
 )
 
+
+# SIGWINCH is deferred to the main loop; the trap itself never draws.
+resize_draws=0
+resize_size_reads=0
+get_term_size() { ((resize_size_reads+=1)); LINES=40; COLUMNS=120; }
+loop_draw() { ((resize_draws+=1)); }
+loop_resize_pending=0
+loop_process_resize
+[[ "$resize_draws" -eq 0 && "$resize_size_reads" -eq 0 ]] || fail "loop processed a resize without a pending SIGWINCH"
+loop_resize_pending=1
+loop_process_resize
+[[ "$resize_draws" -eq 1 && "$resize_size_reads" -eq 1 ]] || fail "loop did not process a deferred SIGWINCH"
+[[ "$loop_resize_pending" -eq 0 ]] || fail "loop did not clear the pending resize flag"
+
 printf 'PASS: runtime ownership, file-operation guards and trash restore regressions\n'
