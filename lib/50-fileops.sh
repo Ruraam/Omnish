@@ -59,14 +59,35 @@ delete_file() {
         (( ${#marked_files[@]} == 0 )) && { status_msg "no files marked"; return; }
         cmd_yes_no "Trash ${#marked_files[@]} item(s)?"
         [[ $cmd_reply == yes ]] || { status_msg "cancelled"; return; }
-        local total=${#marked_files[@]}
-        # Pass the complete selection to trash() so it becomes one undo batch,
-        # rather than creating one independent batch per selected file.
-        if trash "${marked_files[@]}"; then
-            generate_mark_file
-            status_msg "trashed $total item(s)"
+        local total=${#marked_files[@]} f failed=0 can_batch=1
+        # Batch ordinary user files into one undo operation. Preserve delete()'s
+        # special handling for internal state and OMNI_USE_TRASH=0.
+        if [[ "${OMNI_USE_TRASH:-1}" != 1 ]]; then
+            can_batch=0
         else
-            status_msg "some items could not be trashed (marks kept)"
+            for f in "${marked_files[@]}"; do
+                case "$f" in
+                    "$MARKED_FILES_FILE"|"$CACHE_OMNISH_DIR"/*|"$TMP_OMNISH_DIR"/*)
+                        can_batch=0
+                        break
+                        ;;
+                esac
+            done
+        fi
+
+        if (( can_batch )); then
+            trash "${marked_files[@]}" || failed=1
+        else
+            for f in "${marked_files[@]}"; do
+                delete "$f" 2>/dev/null || ((++failed))
+            done
+        fi
+
+        if (( failed == 0 )); then
+            generate_mark_file
+            status_msg "deleted $total item(s)"
+        else
+            status_msg "some items could not be deleted (marks kept)"
         fi
     }
 
