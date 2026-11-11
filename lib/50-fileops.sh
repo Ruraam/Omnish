@@ -32,6 +32,21 @@ _reload_marks() {
     ((${#marked_files[@]})) && [[ -z "${marked_files[0]}" ]] && marked_files=()
 }
 
+# Reject multi-source operations when two selected paths share a basename.
+# Copying/moving both into one directory would otherwise silently overwrite one.
+_fileops_has_duplicate_basenames() {
+    local f name previous
+    local -a names=()
+    for f in "$@"; do
+        name="${f##*/}"
+        for previous in "${names[@]}"; do
+            [[ "$name" == "$previous" ]] && return 0
+        done
+        names+=("$name")
+    done
+    return 1
+}
+
 # ===============================================================
 delete() {
     # [P1] Internal cache always rm; user files go to trash
@@ -149,6 +164,10 @@ copy_file() {
 
     _copy_marked() {
         (( ${#marked_files[@]} == 0 )) && { status_msg "no files marked"; return; }
+        _fileops_has_duplicate_basenames "${marked_files[@]}" && {
+            status_msg "duplicate basenames in selection; process them separately"
+            return
+        }
         [[ -w "$PWD" ]] || { status_msg "no write access"; return; }
 
         local existing=() f
@@ -236,6 +255,10 @@ move_file() {
 
     _move_marked() {
         (( ${#marked_files[@]} == 0 )) && { status_msg "no files marked"; return; }
+        _fileops_has_duplicate_basenames "${marked_files[@]}" && {
+            status_msg "duplicate basenames in selection; process them separately"
+            return
+        }
         [[ -w "$PWD" ]] || { status_msg "no write access"; return; }
 
         local existing=() f
