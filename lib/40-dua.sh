@@ -218,7 +218,7 @@ _dua_interactive() {
     local maxlines="$DUA_TREE_LINES"
     local preview_w
 
-    preview_w=$(cat "$MARGIN_PREVIEW" 2>/dev/null || echo 60)
+    preview_w="${OMNISH_PREVIEW_WIDTH:-$(cat "$MARGIN_PREVIEW" 2>/dev/null || echo 60)}"
 
     while :; do
         local result key sel path listfile
