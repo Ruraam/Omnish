@@ -31,3 +31,5 @@ jobs:
           shellcheck --shell=bash --severity=error install.sh uninstall.sh omnish lib/*.sh tests/*.sh
       - name: Regression tests
         run: bash tests/regression.sh
+      - name: PTY integration tests
+        run: python3 tests/pty_integration.py
