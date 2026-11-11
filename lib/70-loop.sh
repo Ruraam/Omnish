@@ -56,6 +56,16 @@ loop_reload_marks_from_disk() {
     ((${#marked_files[@]})) && [[ -z "${marked_files[0]}" ]] && marked_files=()
 }
 
+# Keep symlinks as independently markable entries; canonicalize other paths.
+_loop_mark_identity() {
+    local path="$1"
+    if [[ -L "$path" ]]; then
+        printf '%s' "$path"
+    else
+        realpath -- "$path" 2>/dev/null || printf '%s' "$path"
+    fi
+}
+
 loop_rebuild_visual_marks() {
     loop_marks=()
     ((${#marked_files[@]})) || return
@@ -65,7 +75,7 @@ loop_rebuild_visual_marks() {
     local i real
     for i in "${!loop_list[@]}"; do
         [[ -z "${loop_list[i]}" || "${loop_list[i]}" == "empty" ]] && continue
-        real=$(realpath "${loop_list[i]}" 2>/dev/null) || continue
+        real=$(_loop_mark_identity "${loop_list[i]}") || continue
         [[ -n "${mark_set[$real]:-}" ]] && loop_marks[$i]="${loop_list[i]}"
     done
 }
@@ -420,12 +430,7 @@ loop_toggle_mark() {
     local entry="${loop_list[loop_scroll]:-}"
     [[ -z "$entry" || "$entry" == "empty" ]] && return
     local real
-    # Mark the symlink itself, not the referent, matching the fzf backend.
-    if [[ -L "$entry" ]]; then
-        real="$entry"
-    else
-        real=$(realpath -- "$entry" 2>/dev/null) || real="$entry"
-    fi
+    real=$(_loop_mark_identity "$entry")
 
     local -a new_marked=()
     local found=0 p
@@ -457,7 +462,7 @@ loop_mark_all_only() {
     local i real
     for (( i=0; i<=loop_total; i++ )); do
         [[ "${loop_list[i]}" == "empty" ]] && continue
-        real=$(realpath "${loop_list[i]}" 2>/dev/null) || real="${loop_list[i]}"
+        real=$(_loop_mark_identity "${loop_list[i]}")
         kept+=("$real")
     done
     marked_files=("${kept[@]}")
