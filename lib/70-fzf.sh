@@ -90,11 +90,17 @@ mark_all_files() {
     local f
     if [[ -f "$CACHE_OMNISH_DIR/showhidden" ]]; then
         while IFS= read -r -d '' f; do
-            [[ -e "$f" ]] && all_files+=("$(realpath "$f")")
+            if [[ -e "$f" || -L "$f" ]]; then
+                if [[ -L "$f" ]]; then all_files+=("$PWD/${f#./}")
+                else all_files+=("$(realpath -- "$f")"); fi
+            fi
         done < <(find . -mindepth 1 -maxdepth 1 -print0 2>/dev/null)
     else
         while IFS= read -r -d '' f; do
-            [[ -e "$f" ]] && all_files+=("$(realpath "$f")")
+            if [[ -e "$f" || -L "$f" ]]; then
+                if [[ -L "$f" ]]; then all_files+=("$PWD/${f#./}")
+                else all_files+=("$(realpath -- "$f")"); fi
+            fi
         done < <(find . -mindepth 1 -maxdepth 1 -not -name '.*' -print0 2>/dev/null)
     fi
 }
