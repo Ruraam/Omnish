@@ -55,12 +55,15 @@ def loop_resize_and_exit_test(tmp):
     pid, master = pty.fork()
     if pid == 0:
         env = os.environ.copy()
-        env.update({"OMNISH_TEST_ROOT": ROOT, "OMNISH_TEST_TRACE": trace,
+        env.update({"OMNISH_TEST_ROOT": ROOT, "OMNISH_TEST_TRACE": trace, "OMNISH_TEST_ERROR": os.path.join(tmp, "child.err"),
                     "OMNISH_RUNTIME_DIR": os.path.join(tmp, "runtime"),
                     "OMNI_CD_ON_EXIT": "0"})
         script = r'''
 set -euo pipefail
+exec 2>"$OMNISH_TEST_ERROR"
+printf 'CHILD-START\\n'
 source "$OMNISH_TEST_ROOT/lib/00-config.sh"
+printf 'CONFIG-LOADED\\n'
 source "$OMNISH_TEST_ROOT/lib/10-utils.sh"
 source "$OMNISH_TEST_ROOT/lib/70-loop.sh"
 loop_read_dir() { loop_list=("fixture"); loop_total=0; loop_prev_idx=0; }
@@ -74,7 +77,15 @@ loop_main "$1"
 '''
         os.execvpe("bash", ["bash", "-c", script, "pty-loop", target], env)
     try:
-        read_until(master, b"DRAW", 5)
+        try:
+            read_until(master, b"DRAW", 5)
+        except AssertionError as exc:
+            error_log = ""
+            error_path = os.path.join(tmp, "child.err")
+            if os.path.exists(error_path):
+                with open(error_path, encoding="utf-8") as stream:
+                    error_log = stream.read()
+            raise AssertionError(f"{exc}; child stderr={error_log!r}") from exc
         deadline = time.monotonic() + 3
         while not os.path.exists(trace) and time.monotonic() < deadline:
             time.sleep(0.01)
