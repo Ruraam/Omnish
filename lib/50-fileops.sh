@@ -30,6 +30,7 @@ _reload_marks() {
     [[ -f "${MARKED_FILES_FILE:-}" ]] && \
         mapfile -t marked_files < "$MARKED_FILES_FILE" 2>/dev/null
     ((${#marked_files[@]})) && [[ -z "${marked_files[0]}" ]] && marked_files=()
+    return 0
 }
 
 # Reject multi-source operations when two selected paths share a basename.
