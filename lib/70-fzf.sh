@@ -261,7 +261,7 @@ fzf_binds() {
             --bind 'esc:execute(echo "$PWD" > "$CACHE_OMNISH_DIR/last_folder"; echo 130 > "$TMP_OMNISH_DIR/signal")+abort' \
             --bind 'ctrl-q:execute(echo "$PWD" > "$CACHE_OMNISH_DIR/last_folder"; echo 130 > "$TMP_OMNISH_DIR/signal")+abort' \
             --bind 'ctrl-c:execute(echo "$PWD" > "$CACHE_OMNISH_DIR/last_folder"; echo 130 > "$TMP_OMNISH_DIR/signal")+abort' \
-            --preview 'bash "$OMNISH_ENTRYPOINT" --preview-file "$OMNISH_PREVIEW_BASE/{}"' \
+            --preview 'bash "$OMNISH_ENTRYPOINT" --preview-file "$OMNISH_PREVIEW_BASE"/{}' \
             --preview-window "right:${margin_preview}:noborder${hidepreview}" \
             --expect=enter,right)
 
