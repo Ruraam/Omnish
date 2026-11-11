@@ -145,7 +145,7 @@ _omnish_flush_tty_input() {
         exec {tty_fd}>&-
         return 0
     }
-    while IFS= read -rsn 1 -t 0 -u "$tty_fd" pending 2>/dev/null; do
+    while IFS= read -rsn 1 -t 0.01 -u "$tty_fd" pending 2>/dev/null; do
         pending=''
     done
     stty "$saved_tty" <&"$tty_fd" 2>/dev/null || true
