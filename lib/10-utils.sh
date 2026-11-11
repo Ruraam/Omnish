@@ -124,6 +124,19 @@ get_term_size() {
     message_width=$(( COLUMNS / 2 ))
 }
 
+# Drain bytes already queued on the controlling terminal. This prevents
+# partial escape sequences or type-ahead from leaking into the parent shell.
+_omnish_flush_tty_input() {
+    [[ -r /dev/tty && -w /dev/tty ]] || return 0
+    local tty_fd pending=''
+    exec {tty_fd}<>/dev/tty 2>/dev/null || return 0
+    while IFS= read -rsn 1 -t 0 -u "$tty_fd" pending 2>/dev/null; do
+        pending=''
+    done
+    exec {tty_fd}>&-
+    return 0
+}
+
 # ===============================================================
 # cleanup — restores terminal, persists cwd, removes temp dir.
 # NOTE: This function is idempotent and safe to call from EXIT only.
@@ -131,6 +144,8 @@ get_term_size() {
 #       Installed by fzf_main() and loop_main() instead.
 # ===============================================================
 cleanup() {
+    _omnish_flush_tty_input
+
     # Kill progress/spinner if 25-progress.sh is loaded
     if declare -F _progress_cleanup >/dev/null 2>&1; then
         _progress_cleanup
