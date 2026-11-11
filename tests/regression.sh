@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Focused regression tests for runtime ownership, file operations and trash.
 set -euo pipefail
+trap 'rc=$?; printf "FAIL: regression command at line %s (exit %s): %s\\n" "$LINENO" "$rc" "$BASH_COMMAND" >&2; exit "$rc"' ERR
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 WORK="$(mktemp -d)"
