@@ -420,7 +420,12 @@ loop_toggle_mark() {
     local entry="${loop_list[loop_scroll]:-}"
     [[ -z "$entry" || "$entry" == "empty" ]] && return
     local real
-    real=$(realpath "$entry" 2>/dev/null) || real="$entry"
+    # Mark the symlink itself, not the referent, matching the fzf backend.
+    if [[ -L "$entry" ]]; then
+        real="$entry"
+    else
+        real=$(realpath -- "$entry" 2>/dev/null) || real="$entry"
+    fi
 
     local -a new_marked=()
     local found=0 p
@@ -565,12 +570,28 @@ loop_rename_current() {
 
 loop_paste() {
     (( ${#marked_files[@]} == 0 )) && { status_msg "nothing marked"; loop_draw; return; }
-    spinner_begin "pasting ${#marked_files[@]} item(s)"
-    cp -rf -- "${marked_files[@]}" "$PWD" 2>/dev/null \
-        && { spinner_end; status_msg "pasted ${#marked_files[@]}"; } \
-        || { spinner_end; status_msg "paste failed"; }
-    marked_files=()
-    sync_marked_files
+
+    local -a existing=()
+    local f
+    for f in "${marked_files[@]}"; do
+        [[ -e "$PWD/${f##*/}" || -L "$PWD/${f##*/}" ]] && existing+=("${f##*/}")
+    done
+    if (( ${#existing[@]} > 0 )); then
+        cmd_yes_no "Overwrite ${#existing[@]} existing item(s)?"
+        [[ $cmd_reply == yes ]] || { status_msg "cancelled"; loop_draw; return; }
+    fi
+
+    local total=${#marked_files[@]}
+    spinner_begin "pasting $total item(s)"
+    if cp -rf -- "${marked_files[@]}" "$PWD" 2>/dev/null; then
+        spinner_end
+        status_msg "pasted $total item(s)"
+        marked_files=()
+        sync_marked_files
+    else
+        spinner_end
+        status_msg "paste failed (marks kept)"
+    fi
     loop_show_help=0
     loop_draw full
 }
