@@ -54,6 +54,7 @@ def loop_resize_and_exit_test(tmp):
     os.mkdir(target)
     pid, master = pty.fork()
     if pid == 0:
+        fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
         env = os.environ.copy()
         env.update({"OMNISH_TEST_ROOT": ROOT, "OMNISH_TEST_TRACE": trace, "OMNISH_TEST_ERROR": os.path.join(tmp, "child.err"),
                     "OMNISH_RUNTIME_DIR": os.path.join(tmp, "runtime"),
