@@ -62,12 +62,11 @@ _sys_display_text() {
     [[ -n "$body" ]] || body="$title: (no output)"
 
     if [[ "${OMNISH_BACKEND:-fzf}" != "fzf" ]] || ! command -v fzf >/dev/null 2>&1; then
-        if command -v less >/dev/null 2>&1; then
-            printf '%s\n' "$body" | less -R
-        else
-            printf '%s\n' "$body"
-            read -rsn 1 -t 30 _ </dev/tty 2>/dev/null || true
-        fi
+        # Do not launch less here: its pager keymap steals arrow keys from
+        # the loop UI and leaves the user at a confusing "(END)" prompt.
+        printf '%s\n\n%s\n' "$title" "$body"
+        printf '\nPress Enter to return...' 
+        IFS= read -r _ </dev/tty 2>/dev/null || :
         return 0
     fi
 
