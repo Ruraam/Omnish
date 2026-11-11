@@ -22,7 +22,9 @@ _omnish_resolve_self() {
         src=$(readlink "$src") || break
         [[ "$src" != /* ]] && src="$dir/$src"
     done
-    (cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd -P)/$(basename "$src")
+    local dir
+    dir=$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd -P) || return 1
+    printf '%s/%s\\n' "$dir" "$(basename -- "$src")"
 }
 SELF="$(_omnish_resolve_self)"
 
