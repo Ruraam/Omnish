@@ -66,6 +66,14 @@ trash() {
         (( failed > 0 )) && { status_msg "trash failed"; return 1; }
         return 0
     fi
+
+    # A partial move is not success: callers must keep the selection so the
+    # failed items remain visible and retryable. Successfully moved items stay
+    # in this batch and can still be restored with one undo operation.
+    if (( failed > 0 )); then
+        status_msg "trashed $trashed item(s); $failed failed"
+        return 1
+    fi
     return 0
 }
 
