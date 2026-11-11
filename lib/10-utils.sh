@@ -152,7 +152,7 @@ cleanup() {
 
     # Restore terminal
     printf '\e[?25h\e[0m' 2>/dev/null || true
-    stty sane 2>/dev/null || true
+    stty sane </dev/tty 2>/dev/null || true
     return 0
 }
 
