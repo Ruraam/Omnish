@@ -129,9 +129,10 @@ get_term_size() {
 # Drain bytes already queued on the controlling terminal. This prevents
 # partial escape sequences or type-ahead from leaking into the parent shell.
 _omnish_flush_tty_input() {
-    [[ -r /dev/tty && -w /dev/tty ]] || return 0
     local tty_fd pending=''
-    exec {tty_fd}<>/dev/tty 2>/dev/null || return 0
+    if ! { exec {tty_fd}<>/dev/tty; } 2>/dev/null; then
+        return 0
+    fi
     while IFS= read -rsn 1 -t 0 -u "$tty_fd" pending 2>/dev/null; do
         pending=''
     done
@@ -167,11 +168,13 @@ cleanup() {
         rm -rf -- "$TMP_OMNISH_DIR" 2>/dev/null
     fi
 
-    # Restore terminal
-    if [[ -t 0 || -t 1 || -t 2 ]]; then
-        printf '\e[?25h\e[0m' >/dev/tty 2>/dev/null || true
+    # Restore terminal only when a controlling TTY can actually be opened.
+    local tty_fd
+    if { exec {tty_fd}<>/dev/tty; } 2>/dev/null; then
+        printf '\e[?25h\e[0m' >&"$tty_fd" 2>/dev/null || true
+        stty sane <&"$tty_fd" 2>/dev/null || true
+        exec {tty_fd}>&-
     fi
-    stty sane </dev/tty 2>/dev/null || true
     return 0
 }
 
