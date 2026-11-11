@@ -1,0 +1,32 @@
+name: Omnish CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bash-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+      - name: Bash syntax
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            bash -n "$file"
+          done < <(find . -type f \( -name '*.sh' -o -name omnish \) -not -path './.git/*' -print0)
+      - name: ShellCheck errors
+        run: |
+          set -euo pipefail
+          shellcheck --severity=error install.sh uninstall.sh omnish lib/*.sh tests/*.sh
+      - name: Regression tests
+        run: bash tests/regression.sh
