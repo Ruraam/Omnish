@@ -8,16 +8,9 @@
 #             filename; only fzf's shell-escaping backslashes are removed.
 
 clean_path() {
-    local p="$1"
-    # Strip leading/trailing whitespace
-    p="${p#"${p%%[![:space:]]*}"}"
-    p="${p%"${p##*[![:space:]]}"}"
-    # Strip surrounding single quotes (fzf wraps paths with spaces sometimes)
-    p="${p#\'}"; p="${p%\'}"
-    # Only remove backslashes that escape shell-special chars (fzf escaping).
-    # This preserves legitimate backslashes in filenames.
-    p=$(printf '%s' "$p" | sed 's/\\\([ ()[\]{}!'"'"'"!&;<>|*?#~]\)/\1/g')
-    printf '%s' "$p"
+    # Paths are data, not shell-escaped display strings. In particular, do
+    # not trim whitespace or remove quotes: both are valid filename bytes.
+    printf '%s' "$1"
 }
 
 _human_size() {
