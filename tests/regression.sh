@@ -175,4 +175,58 @@ printf '%s\n%s\n' "$WORK/marked-a/first item.txt" "$WORK/marked-b/second-item.tx
 [[ "$(cat "$WORK/marked-move-dest/first item.txt")" == third ]] \
     || fail "marked move failed for a spaced filename"
 
+
+# A partial restore must preserve conflicting entries for a safe retry.
+mkdir -p -- "$WORK/restore-a" "$WORK/restore-b"
+printf 'restore alpha\n' > "$WORK/restore-a/conflict item.txt"
+printf 'restore beta\n' > "$WORK/restore-b/retry item.txt"
+trash "$WORK/restore-a/conflict item.txt" "$WORK/restore-b/retry item.txt"
+[[ ! -e "$WORK/restore-a/conflict item.txt" && ! -e "$WORK/restore-b/retry item.txt" ]] \
+    || fail "partial-restore fixture was not trashed"
+printf 'keep existing data\n' > "$WORK/restore-a/conflict item.txt"
+if undo_trash; then
+    fail "undo_trash reported full success despite a destination conflict"
+fi
+[[ "$(cat "$WORK/restore-a/conflict item.txt")" == "keep existing data" ]] \
+    || fail "restore conflict overwrote the existing destination"
+[[ "$(cat "$WORK/restore-b/retry item.txt")" == "restore beta" ]] \
+    || fail "undo_trash did not restore the non-conflicting item"
+latest_batch=$(find "$OMNI_TRASH" -mindepth 1 -maxdepth 1 -type d -print -quit)
+[[ -n "$latest_batch" ]] || fail "partial restore discarded its remaining batch"
+remaining_count=$(find "$latest_batch" -mindepth 1 -maxdepth 1 ! -name '.omnish-manifest' -print | wc -l)
+[[ "$remaining_count" -eq 1 ]] || fail "partial restore did not retain exactly the conflicted item"
+rm -- "$WORK/restore-a/conflict item.txt"
+if ! undo_trash; then
+    fail "undo_trash could not retry after the destination conflict was removed"
+fi
+[[ "$(cat "$WORK/restore-a/conflict item.txt")" == "restore alpha" ]] \
+    || fail "retry did not restore the previously conflicted item"
+
+# Empty batches are harmless and are removed without a spurious restore error.
+empty_batch="$OMNI_TRASH/empty-regression-batch"
+mkdir -p -- "$empty_batch"
+if ! undo_trash; then
+    fail "undo_trash rejected an empty batch"
+fi
+[[ ! -e "$empty_batch" ]] || fail "empty trash batch was not cleaned up"
+
+# Missing sources must not create a phantom trash batch.
+before_batches=$(find "$OMNI_TRASH" -mindepth 1 -maxdepth 1 -type d | wc -l)
+if ! trash "$WORK/does-not-exist"; then
+    fail "trashing a missing source unexpectedly failed"
+fi
+after_batches=$(find "$OMNI_TRASH" -mindepth 1 -maxdepth 1 -type d | wc -l)
+[[ "$before_batches" -eq "$after_batches" ]] || fail "missing source created a phantom trash batch"
+
+# Emptying trash is recursive, confirmation-gated, and keeps the trash root.
+mkdir -p -- "$OMNI_TRASH/empty-regression/nested"
+printf 'permanent deletion fixture\n' > "$OMNI_TRASH/empty-regression/nested/item.txt"
+cmd_yes_no() { cmd_reply=yes; }
+if ! empty_trash; then
+    fail "empty_trash returned failure after confirmed deletion"
+fi
+[[ -d "$OMNI_TRASH" ]] || fail "empty_trash removed the trash root"
+[[ -z "$(find "$OMNI_TRASH" -mindepth 1 -print -quit)" ]] \
+    || fail "empty_trash left entries behind"
+
 printf 'PASS: runtime ownership, file-operation guards and trash restore regressions\n'
