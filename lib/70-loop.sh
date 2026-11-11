@@ -575,6 +575,11 @@ loop_rename_current() {
 
 loop_paste() {
     (( ${#marked_files[@]} == 0 )) && { status_msg "nothing marked"; loop_draw; return; }
+    _fileops_has_duplicate_basenames "${marked_files[@]}" && {
+        status_msg "duplicate basenames in selection; paste separately"
+        loop_draw
+        return
+    }
 
     local -a existing=()
     local f
