@@ -64,7 +64,7 @@ undo_trash
 
 # An internally-created runtime directory is private and cleaned up.
 (
-    unset OMNISH_RUNTIME_DIR OMNISH_RUNTIME_OWNED
+    unset OMNISH_CONFIG_LOADED OMNISH_RUNTIME_DIR OMNISH_RUNTIME_OWNED
     export XDG_RUNTIME_DIR="$WORK"
     source "$ROOT/lib/00-config.sh"
     source "$ROOT/lib/10-utils.sh"
