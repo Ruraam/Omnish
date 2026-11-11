@@ -212,6 +212,7 @@ fzf_binds() {
     # warnings must not end up in $selected.
     local result
     result=$(safe_ls "$path" | \
+        OMNISH_PREVIEW_BASE="$path" \
         FZF_DEFAULT_OPTS='' \
         FZF_DEFAULT_COMMAND='' \
         fzf --ansi --multi --no-bold \
@@ -229,31 +230,31 @@ fzf_binds() {
             --bind 'enter:accept' \
             --bind 'left:top+up+accept' \
             --bind 'ctrl-r,f5:top+accept' \
-            --bind "?:preview(cat \"$helpfile\" 2>/dev/null || echo 'help unavailable')" \
-            --bind "ctrl-h:change-preview(cat \"$helpfile\" 2>/dev/null || echo 'help unavailable')+show-preview" \
-            --bind "f1:execute(bash \"$SCRIPT_PATH\" --show-help {})" \
-            --bind "ctrl-x:execute(bash \"$SCRIPT_PATH\" --system-menu)+top+accept" \
-            --bind "ctrl-o:execute(bash \"$SCRIPT_PATH\" --xdg-open {})+top+accept" \
-            --bind "ctrl-v:execute(bash \"$SCRIPT_PATH\" --move-file {})+top+accept" \
-            --bind "ctrl-y:execute(bash \"$SCRIPT_PATH\" --copy-file {})+top+accept" \
-            --bind "alt-n:execute(bash \"$SCRIPT_PATH\" --create-file {})+top+accept" \
-            --bind "ctrl-n:execute(bash \"$SCRIPT_PATH\" --create-directory {})+top+accept" \
-            --bind "ctrl-s:execute(bash \"$SCRIPT_PATH\" --create-symlink {})+top+accept" \
-            --bind "ctrl-d,ctrl-e:execute(bash \"$SCRIPT_PATH\" --delete-file {})+top+accept" \
-            --bind "${dua_key}:execute(bash \"$SCRIPT_PATH\" --dua \"$PWD\")+top+accept" \
-            --bind "alt-u:execute(bash \"$SCRIPT_PATH\" --undo)+top+accept" \
-            --bind "alt-t:execute(bash \"$SCRIPT_PATH\" --trash-view)+top+accept" \
-            --bind "ctrl-g:execute({ [ ! -f \"$TMP_OMNISH_DIR/grep\" ] && bash \"$SCRIPT_PATH\" --search-term; } || rm -f \"$TMP_OMNISH_DIR/grep\")+top+accept" \
-            --bind "alt-a:toggle+execute-silent(bash \"$SCRIPT_PATH\" --mark-file {})" \
-            --bind "alt-x:select-all+execute-silent(bash \"$SCRIPT_PATH\" --mark-all-only)" \
-            --bind "ctrl-a:toggle-all+execute-silent(bash \"$SCRIPT_PATH\" --mark-all-toggle)" \
-            --bind "alt-h:execute-silent({ [ ! -f \"$CACHE_OMNISH_DIR/showhidden\" ] && touch \"$CACHE_OMNISH_DIR/showhidden\"; } || rm -f \"$CACHE_OMNISH_DIR/showhidden\")+top+accept" \
-            --bind "alt-l:execute-silent({ [ ! -f \"$CACHE_OMNISH_DIR/longfilemanager\" ] && touch \"$CACHE_OMNISH_DIR/longfilemanager\"; } || rm -f \"$CACHE_OMNISH_DIR/longfilemanager\")+top+accept" \
-            --bind "ctrl-p:toggle-preview+execute-silent({ [ ! -f \"$CACHE_OMNISH_DIR/hidepreview\" ] && touch \"$CACHE_OMNISH_DIR/hidepreview\"; } || rm -f \"$CACHE_OMNISH_DIR/hidepreview\")+top+accept" \
-            --bind "esc:execute(echo \"$PWD\" > \"$CACHE_OMNISH_DIR/last_folder\"; echo 130 > \"$TMP_OMNISH_DIR/signal\")+abort" \
-            --bind "ctrl-q:execute(echo \"$PWD\" > \"$CACHE_OMNISH_DIR/last_folder\"; echo 130 > \"$TMP_OMNISH_DIR/signal\")+abort" \
-            --bind "ctrl-c:execute(echo \"$PWD\" > \"$CACHE_OMNISH_DIR/last_folder\"; echo 130 > \"$TMP_OMNISH_DIR/signal\")+abort" \
-            --preview "bash \"$SCRIPT_PATH\" --preview-file \"$path/{}\"" \
+            --bind '?:preview(cat "$TMP_OMNISH_DIR/help.txt" 2>/dev/null || echo "help unavailable")' \
+            --bind 'ctrl-h:change-preview(cat "$TMP_OMNISH_DIR/help.txt" 2>/dev/null || echo "help unavailable")+show-preview' \
+            --bind 'f1:execute(bash "$OMNISH_ENTRYPOINT" --show-help {})' \
+            --bind 'ctrl-x:execute(bash "$OMNISH_ENTRYPOINT" --system-menu)+top+accept' \
+            --bind 'ctrl-o:execute(bash "$OMNISH_ENTRYPOINT" --xdg-open {})+top+accept' \
+            --bind 'ctrl-v:execute(bash "$OMNISH_ENTRYPOINT" --move-file {})+top+accept' \
+            --bind 'ctrl-y:execute(bash "$OMNISH_ENTRYPOINT" --copy-file {})+top+accept' \
+            --bind 'alt-n:execute(bash "$OMNISH_ENTRYPOINT" --create-file {})+top+accept' \
+            --bind 'ctrl-n:execute(bash "$OMNISH_ENTRYPOINT" --create-directory {})+top+accept' \
+            --bind 'ctrl-s:execute(bash "$OMNISH_ENTRYPOINT" --create-symlink {})+top+accept' \
+            --bind 'ctrl-d,ctrl-e:execute(bash "$OMNISH_ENTRYPOINT" --delete-file {})+top+accept' \
+            --bind 'ctrl-u:execute(bash "$OMNISH_ENTRYPOINT" --dua "$PWD")+top+accept' \
+            --bind 'alt-u:execute(bash "$OMNISH_ENTRYPOINT" --undo)+top+accept' \
+            --bind 'alt-t:execute(bash "$OMNISH_ENTRYPOINT" --trash-view)+top+accept' \
+            --bind 'ctrl-g:execute({ [ ! -f "$TMP_OMNISH_DIR/grep" ] && bash "$OMNISH_ENTRYPOINT" --search-term; } || rm -f "$TMP_OMNISH_DIR/grep")+top+accept' \
+            --bind 'alt-a:toggle+execute-silent(bash "$OMNISH_ENTRYPOINT" --mark-file {})' \
+            --bind 'alt-x:select-all+execute-silent(bash "$OMNISH_ENTRYPOINT" --mark-all-only)' \
+            --bind 'ctrl-a:toggle-all+execute-silent(bash "$OMNISH_ENTRYPOINT" --mark-all-toggle)' \
+            --bind 'alt-h:execute-silent({ [ ! -f "$CACHE_OMNISH_DIR/showhidden" ] && touch "$CACHE_OMNISH_DIR/showhidden"; } || rm -f "$CACHE_OMNISH_DIR/showhidden")+top+accept' \
+            --bind 'alt-l:execute-silent({ [ ! -f "$CACHE_OMNISH_DIR/longfilemanager" ] && touch "$CACHE_OMNISH_DIR/longfilemanager"; } || rm -f "$CACHE_OMNISH_DIR/longfilemanager")+top+accept' \
+            --bind 'ctrl-p:toggle-preview+execute-silent({ [ ! -f "$CACHE_OMNISH_DIR/hidepreview" ] && touch "$CACHE_OMNISH_DIR/hidepreview"; } || rm -f "$CACHE_OMNISH_DIR/hidepreview")+top+accept' \
+            --bind 'esc:execute(echo "$PWD" > "$CACHE_OMNISH_DIR/last_folder"; echo 130 > "$TMP_OMNISH_DIR/signal")+abort' \
+            --bind 'ctrl-q:execute(echo "$PWD" > "$CACHE_OMNISH_DIR/last_folder"; echo 130 > "$TMP_OMNISH_DIR/signal")+abort' \
+            --bind 'ctrl-c:execute(echo "$PWD" > "$CACHE_OMNISH_DIR/last_folder"; echo 130 > "$TMP_OMNISH_DIR/signal")+abort' \
+            --preview 'bash "$OMNISH_ENTRYPOINT" --preview-file "$OMNISH_PREVIEW_BASE/{}"' \
             --preview-window "right:${margin_preview}:noborder${hidepreview}" \
             --expect=enter,right)
 
