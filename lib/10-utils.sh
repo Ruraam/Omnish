@@ -115,7 +115,9 @@ _human_size() {
 }
 
 get_term_size() {
-    if [[ -t 1 ]]; then
+    if [[ -r /dev/tty && ( -t 0 || -t 1 || -t 2 ) ]]; then
+        read -r LINES COLUMNS < <(stty size </dev/tty 2>/dev/null) || { LINES=24; COLUMNS=80; }
+    elif [[ -t 1 ]]; then
         read -r LINES COLUMNS < <(stty size 2>/dev/null) || { LINES=24; COLUMNS=80; }
     else
         LINES=${LINES:-24}; COLUMNS=${COLUMNS:-80}
