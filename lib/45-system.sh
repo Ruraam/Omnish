@@ -740,7 +740,7 @@ _sys_services_menu() {
     while :; do
         local header choice
         header="Services (init=$_SYS_INIT) | Esc: back"
-        choice=$(cat <<'EOF' | fzf --no-sort --no-info --header "$header" --preview-window hidden
+        choice=$(cat <<'EOF' | _omnish_select "$header"
 list     List all services
 running  List running services
 status   Show status of a service
@@ -779,7 +779,7 @@ _sys_packages_menu() {
     while :; do
         local header choice
         header="Packages (manager=$_SYS_PKG) | Esc: back"
-        choice=$(cat <<'EOF' | fzf --no-sort --no-info --header "$header" --preview-window hidden
+        choice=$(cat <<'EOF' | _omnish_select "$header"
 list     List installed packages
 search   Search the repository
 install  Install a package
