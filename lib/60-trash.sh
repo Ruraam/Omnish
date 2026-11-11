@@ -68,16 +68,16 @@ trash() {
         # Record the source before moving it. A stale record is harmless if
         # the move fails; a moved file without a record would be harder to find.
         if ! printf '%s\0%s\0' "$stored" "$original" >> "$manifest"; then
-            ((failed++))
+            ((++failed))
             continue
         fi
 
         if mv -- "$f" "$target" 2>/dev/null; then
-            ((trashed++))
+            ((++trashed))
         elif cp -a -- "$f" "$target" 2>/dev/null && rm -rf -- "$f" 2>/dev/null; then
-            ((trashed++))
+            ((++trashed))
         else
-            ((failed++))
+            ((++failed))
         fi
     done
 
@@ -113,7 +113,7 @@ undo_trash() {
     local total=0 restored=0 skipped=0 failed=0 f base destination_dir
     while IFS= read -r -d '' f; do
         [[ "$f" == "$manifest" ]] && continue
-        ((total++))
+        ((++total))
     done < <(find "$batch_dir" -mindepth 1 -maxdepth 1 -print0 2>/dev/null)
 
     if (( total == 0 )); then
@@ -143,17 +143,17 @@ undo_trash() {
 
         # Legacy batches have no manifest and restore to the current directory.
         if [[ ! -d "$destination_dir" ]]; then
-            ((skipped++))
+            ((++skipped))
             continue
         fi
         if [[ -e "$original" || -L "$original" ]]; then
-            ((skipped++))
+            ((++skipped))
             continue
         fi
         if mv -- "$f" "$original" 2>/dev/null; then
-            ((restored++))
+            ((++restored))
         else
-            ((failed++))
+            ((++failed))
         fi
     done < <(find "$batch_dir" -mindepth 1 -maxdepth 1 -print0 2>/dev/null)
 
@@ -197,7 +197,7 @@ empty_trash() {
         # Process substitution (not pipe) so progress_set updates the parent shell
         while IFS= read -r -d '' f; do
             rm -f -- "$f" 2>/dev/null
-            ((i++))
+            ((++i))
             progress_set "$i"
         done < <(find "$OMNI_TRASH" -type f -print0 2>/dev/null)
         progress_set "$total"
