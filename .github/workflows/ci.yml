@@ -28,6 +28,6 @@ jobs:
       - name: ShellCheck errors
         run: |
           set -euo pipefail
-          shellcheck --severity=error install.sh uninstall.sh omnish lib/*.sh tests/*.sh
+          shellcheck --shell=bash --severity=error install.sh uninstall.sh omnish lib/*.sh tests/*.sh
       - name: Regression tests
         run: bash tests/regression.sh
