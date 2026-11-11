@@ -94,8 +94,14 @@ _sys_run() {
         out="$title: (no output)"
     fi
     if (( rc != 0 )); then
-        out+=
-
+        out+=$'\n\n[omnish] command failed (exit status: '"$rc"')'
+    fi
+    printf '%s\n' "$out" | tail -100 | fzf --ansi --no-sort --no-info \
+        --header "$title | Esc: back" \
+        --preview-window 'hidden' \
+        --bind 'enter:accept' >/dev/null
+    return "$rc"
+}
 # ===============================================================
 # Privilege helpers
 # ===============================================================
