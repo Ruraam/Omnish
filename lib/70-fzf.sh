@@ -196,9 +196,9 @@ _ff_ensure_helpfile() {
 # via `execute(...)` don't touch the parent terminal state.
 # ===============================================================
 _omnish_term_restore() {
-    [[ -t 1 ]] || return 0
-    tput cnorm 2>/dev/null || printf '\033[?25h' 2>/dev/null || true
-    tput rmcup 2>/dev/null || true
+    [[ -t 0 || -t 1 || -t 2 ]] || return 0
+    tput cnorm >/dev/tty 2>/dev/null || printf '\033[?25h' >/dev/tty 2>/dev/null || true
+    tput rmcup >/dev/tty 2>/dev/null || true
 }
 
 fzf_binds() {
