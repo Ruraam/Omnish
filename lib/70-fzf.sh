@@ -231,8 +231,9 @@ fzf_binds() {
             --marker='✓' \
             --header "$header_text" \
             --prompt "omnish 🔍: " \
-            --bind 'tab:toggle+down' \
-            --bind 'shift-tab:toggle+up' \
+            --bind 'tab:toggle+down+execute-silent(bash "$OMNISH_ENTRYPOINT" --mark-file {})' \
+            --bind 'shift-tab:toggle+up+execute-silent(bash "$OMNISH_ENTRYPOINT" --mark-file {})' \
+            --bind 'space:toggle+execute-silent(bash "$OMNISH_ENTRYPOINT" --mark-file {})' \
             --bind 'right:accept' \
             --bind 'enter:accept' \
             --bind 'left:top+up+accept' \
