@@ -174,7 +174,7 @@ my_terminal() {
         *)
             local shell="$SHELL"
             [[ -n "$shell" ]] || shell=bash
-            xterm -e "$shell" -lc 'cd -- "$1"; exec "$SHELL" -i' omnish "$PWD" ;;
+            xterm -e "$shell" -lc 'cd -- "$1"; exec "$2" -i' omnish "$PWD" "$shell" ;;
     esac
 }
 
