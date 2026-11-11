@@ -56,7 +56,7 @@ _omnish_select() {
         printf '\nUp/Down or j/k: move   Enter: select   Esc/q: back\n' >&2
 
         key=''
-        IFS= read -rsn1 key </dev/tty || break
+        IFS= read -rsN1 key </dev/tty || break
         case "$key" in
             $'\e')
                 seq=''
