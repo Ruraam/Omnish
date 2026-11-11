@@ -92,16 +92,20 @@ loop_read_dir() {
     local base="$PWD"
     [[ "$base" == "/" ]] && base=""
 
+    # Keep the caller's shell options intact. Also force dotglob off for
+    # the default listing, even if the caller enabled it before this function.
+    local nullglob_was_set=0 dotglob_was_set=0
+    shopt -q nullglob && nullglob_was_set=1
+    shopt -q dotglob && dotglob_was_set=1
+
     local -a entries=()
     shopt -s nullglob
-    if [[ -f "$CACHE_OMNISH_DIR/showhidden" ]]; then
-        shopt -s dotglob
-        entries=("$base"/*)
-        shopt -u dotglob
-    else
-        entries=("$base"/*)
-    fi
-    shopt -u nullglob
+    shopt -u dotglob
+    [[ -f "$CACHE_OMNISH_DIR/showhidden" ]] && shopt -s dotglob
+    entries=("$base"/*)
+
+    if (( nullglob_was_set )); then shopt -s nullglob; else shopt -u nullglob; fi
+    if (( dotglob_was_set )); then shopt -s dotglob; else shopt -u dotglob; fi
 
     for item in "${entries[@]}"; do
         [[ -e "$item" || -L "$item" ]] || continue
