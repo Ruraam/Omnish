@@ -237,7 +237,7 @@ source "$ROOT/lib/70-loop.sh"
 if ! loop_reload_marks_from_disk; then fail "empty mark reload returned failure"; fi
 printf '%s\n' "$WORK/loop-list/visible file.txt" > "$MARKED_FILES_FILE"
 if ! loop_reload_marks_from_disk; then fail "populated mark reload returned failure"; fi
-[[ "\${#marked_files[@]}" -eq 1 ]] || fail "populated mark reload lost its entry"
+declare -p marked_files | grep -Fq -- "$WORK/loop-list/visible file.txt" || fail "populated mark reload lost its entry"
 mkdir -p -- "$WORK/loop-list/visible-dir" "$WORK/loop-list/dir with spaces"
 printf 'visible\n' > "$WORK/loop-list/visible file.txt"
 printf 'hidden\n' > "$WORK/loop-list/.hidden-file"
