@@ -132,8 +132,10 @@ stty -icanon -echo min 1 time 0 </dev/tty
 before=$(stty -g </dev/tty)
 printf 'READY\\n'
 IFS= read -rsn 1 token </dev/tty
+printf 'GOT-TOKEN\\n'
 [[ "$token" == X ]]
 _omnish_flush_tty_input
+printf 'AFTER-FLUSH\\n'
 after=$(stty -g </dev/tty)
 [[ "$before" == "$after" ]] || { printf 'TERMios-MISMATCH\\n'; exit 8; }
 if IFS= read -rsn 1 -t 0.15 leaked </dev/tty 2>/dev/null; then
