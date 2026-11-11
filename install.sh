@@ -39,8 +39,28 @@ for mod in "$stage/lib"/*.sh; do
     [[ -r "$mod" ]] && bash -n "$mod"
 done
 
-rm -rf -- "$SHARE"
-mv -- "$stage" "$SHARE"
+# Replace the installed tree transactionally. Keep the previous version
+# available until the staged tree has been moved into place successfully.
+backup=""
+if [[ -e "$SHARE" || -L "$SHARE" ]]; then
+    backup="$(mktemp -d "${PREFIX}/share/.omnish.backup.XXXXXX")"
+    rmdir -- "$backup"
+    if ! mv -- "$SHARE" "$backup"; then
+        echo "error: cannot move current installation to backup" >&2
+        exit 1
+    fi
+fi
+
+if ! mv -- "$stage" "$SHARE"; then
+    echo "error: cannot activate staged installation" >&2
+    if [[ -n "$backup" && -e "$backup" ]]; then
+        mv -- "$backup" "$SHARE" || echo "error: rollback failed; backup is at $backup" >&2
+    fi
+    exit 1
+fi
+
+# The new tree is active. Only now discard the previous installation.
+[[ -n "$backup" ]] && rm -rf -- "$backup"
 trap - EXIT INT TERM
 ln -sfn "$SHARE/omnish" "$BIN/omnish"
 
