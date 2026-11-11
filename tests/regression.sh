@@ -232,6 +232,12 @@ fi
 
 # The loop backend must not leak shell glob options into its caller.
 source "$ROOT/lib/70-loop.sh"
+# Mark reload is a successful operation for both empty and populated files.
+: > "$MARKED_FILES_FILE"
+if ! loop_reload_marks_from_disk; then fail "empty mark reload returned failure"; fi
+printf '%s\n' "$WORK/loop-list/visible file.txt" > "$MARKED_FILES_FILE"
+if ! loop_reload_marks_from_disk; then fail "populated mark reload returned failure"; fi
+[[ "\${#marked_files[@]}" -eq 1 ]] || fail "populated mark reload lost its entry"
 mkdir -p -- "$WORK/loop-list/visible-dir" "$WORK/loop-list/dir with spaces"
 printf 'visible\n' > "$WORK/loop-list/visible file.txt"
 printf 'hidden\n' > "$WORK/loop-list/.hidden-file"
