@@ -226,7 +226,7 @@ _dua_interactive_loop() {
 
         printf '\nDisk Usage [%s] %s\n' "$mode" "$cur"
         printf 'Enter N: open/descend | u: up | t: toggle view | +/-: depth | r: rescan | q: quit\n\n'
-        if (("${#rows[@]}" == 0)); then
+        if ((${#rows[@]} == 0)); then
             printf '  (empty)\n'
         else
             local i
