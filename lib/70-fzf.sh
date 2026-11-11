@@ -165,7 +165,10 @@ my_terminal() {
         konsole) konsole --workdir "$PWD" ;;
         kitty) kitty --directory="$PWD" ;;
         foot) foot --working-directory="$PWD" ;;
-        *) xterm -e bash -c "cd \"$PWD\" && exec $SHELL" ;;
+        *)
+            local shell="$SHELL"
+            [[ -n "$shell" ]] || shell=bash
+            xterm -e "$shell" -lc 'cd -- "$1"; exec "$SHELL" -i' omnish "$PWD" ;;
     esac
 }
 
