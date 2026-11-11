@@ -109,14 +109,7 @@ undo_trash() {
     [[ -d "$batch_dir" ]] || { status_msg "trash batch not found"; return 1; }
 
     local manifest="$batch_dir/.omnish-manifest"
-    declare -A original_paths=()
-    local stored original
-    if [[ -r "$manifest" ]]; then
-        while IFS= read -r -d '' stored && IFS= read -r -d '' original; do
-            original_paths["$stored"]="$original"
-        done < "$manifest"
-    fi
-
+    local stored original source_path
     local total=0 restored=0 skipped=0 failed=0 f base destination_dir
     while IFS= read -r -d '' f; do
         [[ "$f" == "$manifest" ]] && continue
@@ -134,7 +127,17 @@ undo_trash() {
     while IFS= read -r -d '' f; do
         [[ "$f" == "$manifest" ]] && continue
         base=$(basename -- "$f")
-        original="${original_paths[$base]:-$PWD/$base}"
+        original="$PWD/$base"
+        # Linear lookup avoids treating an arbitrary filename as an array
+        # subscript (names may contain shell metacharacters).
+        if [[ -r "$manifest" ]]; then
+            while IFS= read -r -d '' stored && IFS= read -r -d '' source_path; do
+                if [[ "$stored" == "$base" ]]; then
+                    original="$source_path"
+                    break
+                fi
+            done < "$manifest"
+        fi
         destination_dir="${original%/*}"
         [[ -n "$destination_dir" ]] || destination_dir="/"
 
