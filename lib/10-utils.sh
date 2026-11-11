@@ -56,8 +56,14 @@ cleanup() {
         printf '%s\n' "$PWD" > "$OMNI_CD_FILE" 2>/dev/null
     fi
 
-    # Remove temp dir last (subcommands must not do this)
-    [[ -d "$TMP_OMNISH_DIR" ]] && rm -rf "$TMP_OMNISH_DIR" 2>/dev/null
+    # Remove only the private directory created by this Omnish process.
+    # Caller-provided OMNISH_RUNTIME_DIR values are never recursively deleted.
+    if [[ "${OMNISH_RUNTIME_OWNED:-0}" == 1
+          && -n "${TMP_OMNISH_DIR:-}"
+          && -d "$TMP_OMNISH_DIR"
+          && ! -L "$TMP_OMNISH_DIR" ]]; then
+        rm -rf -- "$TMP_OMNISH_DIR" 2>/dev/null
+    fi
 
     # Restore terminal
     printf '\e[?25h\e[0m' 2>/dev/null
