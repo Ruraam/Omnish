@@ -135,7 +135,7 @@ _sys_all_report() {
     model=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2- | xargs)
     [[ -n "$model" ]] || model=$(uname -m)
     cores=$(nproc 2>/dev/null || grep -c '^processor' /proc/cpuinfo 2>/dev/null || echo 1)
-    cpu=$(top -b -n1 2>/dev/null | awk '/Cpu\\(s\\)/ { print; exit }')
+    cpu=$(top -b -n1 2>/dev/null | awk '/Cpu\(s\)/ { print; exit }')
     [[ -n "$cpu" ]] || cpu="CPU usage unavailable"
 
     if command -v sensors >/dev/null 2>&1; then
@@ -157,7 +157,7 @@ _sys_all_report() {
 
     if command -v ip >/dev/null 2>&1; then
         network=$(ip -br addr show 2>&1 | grep -v ' lo ' || :)
-        network+=$'\\n\\n'"$(ip route 2>&1 | head -10)"
+        network+=$'\n\n'"$(ip route 2>&1 | head -10)"
     elif command -v ifconfig >/dev/null 2>&1; then
         network=$(ifconfig 2>&1 | grep -E 'inet |^[a-z]' || :)
     else
