@@ -187,7 +187,7 @@ loop_draw_preview() {
         visible=$(printf '%s' "$line" | sed 's/\x1b\[[0-9;]*m//g')
         (( ${#visible} > width )) && line="${visible:0:width-1}…"
         printf '\e[%s;%sH%s\e[K' "$((row+1))" "$col" "$line"
-        ((row++))
+        ((row+=1))
     done < "$tmpf"
     rm -f "$tmpf"
 }
@@ -225,7 +225,7 @@ loop_draw() {
     for (( i=start; i<=loop_total && row<rows; i++ )); do
         printf '\e[%s;1H' "$((row+1))"
         loop_print_line "$i" "$list_w"
-        ((row++))
+        ((row+=1))
     done
 
     for (( row=0; row<rows; row++ )); do
@@ -249,7 +249,7 @@ loop_status_line() {
     local mark_count=0
     local k
     for k in "${!loop_marks[@]}"; do
-        [[ -n "${loop_marks[k]:-}" ]] && ((mark_count++))
+        [[ -n "${loop_marks[k]:-}" ]] && ((mark_count+=1))
     done
     (( mark_count > 0 )) && mark_info="[${mark_count} marked] "
     (( ${loop_show_help:-0} )) && mark_info="[HELP] ${mark_info}"
@@ -293,8 +293,8 @@ loop_handle_key() {
 
     case "$k" in
         # === Navigation ===
-        j|DOWN)  (( loop_scroll < loop_total )) && (( loop_scroll++ )) ; loop_show_help=0 ; loop_draw ;;
-        k|UP)    (( loop_scroll > 0 )) && (( loop_scroll-- )) ; loop_show_help=0 ; loop_draw ;;
+        j|DOWN)  (( loop_scroll < loop_total )) && (( loop_scroll+=1 )) ; loop_show_help=0 ; loop_draw ;;
+        k|UP)    (( loop_scroll > 0 )) && (( loop_scroll-=1 )) ; loop_show_help=0 ; loop_draw ;;
         g)       loop_scroll=0 ; loop_show_help=0 ; loop_draw ;;
         G)       loop_scroll=$loop_total ; loop_show_help=0 ; loop_draw ;;
         l|RIGHT|'')  loop_open_selected ;;
@@ -306,13 +306,13 @@ loop_handle_key() {
         # === Multi-select ===
         $'\t')
                  loop_mark_current_silent
-                 (( loop_scroll < loop_total )) && (( loop_scroll++ ))
+                 (( loop_scroll < loop_total )) && (( loop_scroll+=1 ))
                  loop_show_help=0
                  loop_draw
                  ;;
         SHIFT_TAB)
                  loop_mark_current_silent
-                 (( loop_scroll > 0 )) && (( loop_scroll-- ))
+                 (( loop_scroll > 0 )) && (( loop_scroll-=1 ))
                  loop_show_help=0
                  loop_draw
                  ;;
@@ -496,7 +496,7 @@ loop_mark_all_toggle() {
 
     local marked_count=0
     for real in "${current_reals[@]}"; do
-        [[ -n "${current_marked[$real]:-}" ]] && ((marked_count++))
+        [[ -n "${current_marked[$real]:-}" ]] && ((marked_count+=1))
     done
 
     if (( ${#current_reals[@]} > 0 && marked_count == ${#current_reals[@]} )); then
