@@ -240,16 +240,16 @@ printf 'hidden\n' > "$WORK/loop-list/.hidden-file"
     rm -f -- "$CACHE_OMNISH_DIR/showhidden"
     shopt -u nullglob dotglob
     loop_read_dir
-    [[ $(shopt -q nullglob; echo $?) -eq 1 ]] || fail "loop_read_dir leaked nullglob when initially disabled"
-    [[ $(shopt -q dotglob; echo $?) -eq 1 ]] || fail "loop_read_dir leaked dotglob when initially disabled"
+    if shopt -q nullglob; then fail "loop_read_dir leaked nullglob when initially disabled"; fi
+    if shopt -q dotglob; then fail "loop_read_dir leaked dotglob when initially disabled"; fi
     [[ " ${loop_list[*]} " == *"visible file.txt"* ]] || fail "loop listing omitted a visible filename with spaces"
     [[ " ${loop_list[*]} " != *".hidden-file"* ]] || fail "hidden file appeared while showhidden was disabled"
 
     # An inherited dotglob must not expose hidden files when showhidden is off.
     shopt -s nullglob dotglob
     loop_read_dir
-    [[ $(shopt -q nullglob; echo $?) -eq 0 ]] || fail "loop_read_dir disabled caller's nullglob"
-    [[ $(shopt -q dotglob; echo $?) -eq 0 ]] || fail "loop_read_dir disabled caller's dotglob"
+    shopt -q nullglob || fail "loop_read_dir disabled caller's nullglob"
+    shopt -q dotglob || fail "loop_read_dir disabled caller's dotglob"
     [[ " ${loop_list[*]} " != *".hidden-file"* ]] || fail "inherited dotglob bypassed showhidden setting"
 
     touch "$CACHE_OMNISH_DIR/showhidden"
