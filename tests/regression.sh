@@ -131,4 +131,48 @@ printf 'copy payload\n' > "$WORK/op-source/file with spaces.txt"
 [[ "$(readlink -- "$WORK/op-dest/created link")" == "$WORK/op-dest/moved file.txt" ]] \
     || fail "create_symlink target was not preserved"
 
+
+# Marked multi-file operations must reject colliding destination basenames.
+mkdir -p -- "$WORK/marked-a" "$WORK/marked-b" "$WORK/marked-dest"
+printf 'first\n' > "$WORK/marked-a/collision.txt"
+printf 'second\n' > "$WORK/marked-b/collision.txt"
+printf '%s\n%s\n' "$WORK/marked-a/collision.txt" "$WORK/marked-b/collision.txt" > "$WORK/marks.txt"
+MARKED_FILES_FILE="$WORK/marks.txt"
+(
+    cd -- "$WORK/marked-dest"
+    copy_file ""
+)
+[[ ! -e "$WORK/marked-dest/collision.txt" ]] || fail "marked copy overwrote a colliding basename"
+(
+    cd -- "$WORK/marked-dest"
+    move_file ""
+)
+[[ -f "$WORK/marked-a/collision.txt" && -f "$WORK/marked-b/collision.txt" ]] \
+    || fail "marked move consumed files with colliding basenames"
+
+# Distinct marked files must copy and move as a batch without losing spaces.
+printf 'third\n' > "$WORK/marked-a/first item.txt"
+printf 'fourth\n' > "$WORK/marked-b/second-item.txt"
+printf '%s\n%s\n' "$WORK/marked-a/first item.txt" "$WORK/marked-b/second-item.txt" > "$WORK/marks.txt"
+generate_mark_file() { marked_files=(); :; }
+(
+    cd -- "$WORK/marked-dest"
+    copy_file ""
+)
+[[ "$(cat "$WORK/marked-dest/first item.txt")" == third ]] \
+    || fail "marked copy failed for a spaced filename"
+[[ "$(cat "$WORK/marked-dest/second-item.txt")" == fourth ]] \
+    || fail "marked copy failed for a second source"
+
+mkdir -p -- "$WORK/marked-move-dest"
+printf '%s\n%s\n' "$WORK/marked-a/first item.txt" "$WORK/marked-b/second-item.txt" > "$WORK/marks.txt"
+(
+    cd -- "$WORK/marked-move-dest"
+    move_file ""
+)
+[[ ! -e "$WORK/marked-a/first item.txt" && ! -e "$WORK/marked-b/second-item.txt" ]] \
+    || fail "marked move did not remove both sources"
+[[ "$(cat "$WORK/marked-move-dest/first item.txt")" == third ]] \
+    || fail "marked move failed for a spaced filename"
+
 printf 'PASS: runtime ownership, file-operation guards and trash restore regressions\n'
