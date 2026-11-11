@@ -29,24 +29,47 @@
 # trash — move files to a new timestamped batch dir
 # ===============================================================
 trash() {
-    local dir target f
-    local trashed=0 failed=0
-    local total=$#
+    local dir target f stored original manifest
+    local trashed=0 failed=0 total=$#
+    mkdir -p -- "$OMNI_TRASH" 2>/dev/null || {
+        status_msg "cannot create trash directory"
+        return 1
+    }
 
-    mkdir -p "$OMNI_TRASH" 2>/dev/null
-    # [FIX 2] mktemp -d guarantees uniqueness across same-second calls
     dir=$(mktemp -d "$OMNI_TRASH/$(date +%Y%m%d-%H%M%S)-XXXXXX" 2>/dev/null) \
         || { status_msg "cannot create trash dir"; return 1; }
+    manifest="$dir/.omnish-manifest"
+    : > "$manifest" || { rmdir -- "$dir" 2>/dev/null; status_msg "cannot create trash manifest"; return 1; }
+    chmod 600 -- "$manifest" 2>/dev/null || {
+        rm -f -- "$manifest"; rmdir -- "$dir" 2>/dev/null
+        status_msg "cannot secure trash manifest"
+        return 1
+    }
 
     (( total > 3 )) && spinner_begin "trashing $total item(s)"
 
     for f in "$@"; do
         [[ -e "$f" || -L "$f" ]] || continue
 
-        # [FIX 3] basename collision → unique suffix
-        target="$dir/$(basename -- "$f")"
+        # Preserve the lexical source path (including a symlink itself).
+        if [[ "$f" == /* ]]; then original="$f"; else original="$PWD/$f"; fi
+
+        stored="$(basename -- "$f")"
+        target="$dir/$stored"
         if [[ -e "$target" || -L "$target" ]]; then
-            target="$dir/$(basename -- "$f").$$.$RANDOM"
+            stored="$stored.$$.$RANDOM"
+            target="$dir/$stored"
+            while [[ -e "$target" || -L "$target" ]]; do
+                stored="$(basename -- "$f").$$.$RANDOM"
+                target="$dir/$stored"
+            done
+        fi
+
+        # Record the source before moving it. A stale record is harmless if
+        # the move fails; a moved file without a record would be harder to find.
+        if ! printf '%s\0%s\0' "$stored" "$original" >> "$manifest"; then
+            ((failed++))
+            continue
         fi
 
         if mv -- "$f" "$target" 2>/dev/null; then
@@ -60,16 +83,13 @@ trash() {
 
     (( total > 3 )) && spinner_end
 
-    # [FIX 1] Clean up empty batch dir + explicit return
     if (( trashed == 0 )); then
+        rm -f -- "$manifest"
         rmdir -- "$dir" 2>/dev/null
         (( failed > 0 )) && { status_msg "trash failed"; return 1; }
         return 0
     fi
 
-    # A partial move is not success: callers must keep the selection so the
-    # failed items remain visible and retryable. Successfully moved items stay
-    # in this batch and can still be restored with one undo operation.
     if (( failed > 0 )); then
         status_msg "trashed $trashed item(s); $failed failed"
         return 1
@@ -78,7 +98,7 @@ trash() {
 }
 
 # ===============================================================
-# undo_trash — restore the most recent batch
+# undo_trash — restore the most recent batch to its original paths
 # ===============================================================
 undo_trash() {
     local latest
@@ -86,27 +106,48 @@ undo_trash() {
     [[ -z "$latest" ]] && { status_msg "trash is empty"; return 1; }
 
     local batch_dir="$OMNI_TRASH/$latest"
+    [[ -d "$batch_dir" ]] || { status_msg "trash batch not found"; return 1; }
 
-    # [FIX 5] Empty batch (or batch removed) → clean silently
-    if [[ ! -d "$batch_dir" ]] \
-       || ! find "$batch_dir" -mindepth 1 -print -quit 2>/dev/null | grep -q .; then
-        rmdir -- "$batch_dir" 2>/dev/null
-        status_msg "batch '$latest' was empty, removed"
-        return 0
+    local manifest="$batch_dir/.omnish-manifest"
+    declare -A original_paths=()
+    local stored original
+    if [[ -r "$manifest" ]]; then
+        while IFS= read -r -d '' stored && IFS= read -r -d '' original; do
+            original_paths["$stored"]="$original"
+        done < "$manifest"
     fi
 
-    local total restored=0 skipped=0 failed=0 f base
-    total=$(find "$batch_dir" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)
+    local total=0 restored=0 skipped=0 failed=0 f base destination_dir
+    while IFS= read -r -d '' f; do
+        [[ "$f" == "$manifest" ]] && continue
+        ((total++))
+    done < <(find "$batch_dir" -mindepth 1 -maxdepth 1 -print0 2>/dev/null)
+
+    if (( total == 0 )); then
+        rm -f -- "$manifest"
+        rmdir -- "$batch_dir" 2>/dev/null
+        status_msg "trash is empty"
+        return 0
+    fi
     (( total > 5 )) && spinner_begin "restoring $total item(s)"
 
-    # [FIX 4] Per-file check + mv (mv -n skips silently, we want to know)
     while IFS= read -r -d '' f; do
+        [[ "$f" == "$manifest" ]] && continue
         base=$(basename -- "$f")
-        if [[ -e "./$base" || -L "./$base" ]]; then
+        original="${original_paths[$base]:-$PWD/$base}"
+        destination_dir="${original%/*}"
+        [[ -n "$destination_dir" ]] || destination_dir="/"
+
+        # Legacy batches have no manifest and restore to the current directory.
+        if [[ ! -d "$destination_dir" ]]; then
             ((skipped++))
             continue
         fi
-        if mv -- "$f" ./ 2>/dev/null; then
+        if [[ -e "$original" || -L "$original" ]]; then
+            ((skipped++))
+            continue
+        fi
+        if mv -- "$f" "$original" 2>/dev/null; then
             ((restored++))
         else
             ((failed++))
@@ -115,17 +156,20 @@ undo_trash() {
 
     (( total > 5 )) && spinner_end
 
-    # Try to remove the now-empty batch dir
-    rmdir -- "$batch_dir" 2>/dev/null
+    # Keep the manifest and any conflicted files so a later retry remains safe.
+    if ! find "$batch_dir" -mindepth 1 ! -name '.omnish-manifest' -print -quit 2>/dev/null | grep -q .; then
+        rm -f -- "$manifest"
+        rmdir -- "$batch_dir" 2>/dev/null
+    fi
 
-    # [FIX 6] Detailed report
     if (( failed == 0 && skipped == 0 )); then
         status_msg "restored $restored item(s) from '$latest'"
     elif (( failed == 0 )); then
-        status_msg "restored $restored, skipped $skipped (exist)"
+        status_msg "restored $restored, skipped $skipped (destination unavailable or exists)"
     else
         status_msg "restored $restored, skipped $skipped, failed $failed"
     fi
+    (( failed == 0 && skipped == 0 ))
 }
 
 # ===============================================================
@@ -172,40 +216,57 @@ empty_trash() {
 # trash_view — browse trash, restore individual items
 # ===============================================================
 trash_view() {
-    local f batch base batch_dir
-    # [FIX 8] {1} inside the quotes so spaces in filenames work
-    f=$(find "$OMNI_TRASH" -mindepth 2 -maxdepth 2 2>/dev/null \
+    local f batch base batch_dir manifest original destination_dir
+    f=$(find "$OMNI_TRASH" -mindepth 2 -maxdepth 2 ! -name '.omnish-manifest' 2>/dev/null \
         | sed "s|$OMNI_TRASH/||" | head -200 \
         | fzf --header "Trash: $OMNI_TRASH | Enter: restore | Esc: quit" \
-              --preview "ls -la -- \"$OMNI_TRASH/{1}\" 2>/dev/null" \
+              --preview 'ls -la -- "$OMNI_TRASH/{}" 2>/dev/null' \
               --preview-window 'right:50%:wrap')
     [[ -z "$f" ]] && return
-    batch="${f%%/*}"; base="${f#*/}"
-    batch_dir="$OMNI_TRASH/$batch"
 
-    # [FIX 9] Existence check
-    if [[ ! -e "$batch_dir/$base" && ! -L "$batch_dir/$base" ]]; then
+    batch="${f%%/*}"
+    base="${f#*/}"
+    batch_dir="$OMNI_TRASH/$batch"
+    manifest="$batch_dir/.omnish-manifest"
+    original="$PWD/$base"
+
+    if [[ -r "$manifest" ]]; then
+        local stored source
+        while IFS= read -r -d '' stored && IFS= read -r -d '' source; do
+            if [[ "$stored" == "$base" ]]; then
+                original="$source"
+                break
+            fi
+        done < "$manifest"
+    fi
+
+    [[ -e "$batch_dir/$base" || -L "$batch_dir/$base" ]] || {
         status_msg "not found: $batch/$base"
+        return 1
+    }
+
+    destination_dir="${original%/*}"
+    [[ -n "$destination_dir" ]] || destination_dir="/"
+    if [[ ! -d "$destination_dir" ]]; then
+        status_msg "original directory no longer exists: $destination_dir"
+        return 1
+    fi
+    if [[ -e "$original" || -L "$original" ]]; then
+        status_msg "restore conflict: $original already exists"
         return 1
     fi
 
-    if [[ -e "./$base" || -L "./$base" ]]; then
-        cmd_yes_no "'$base' exists in cwd. Overwrite?"
-        if [[ $cmd_reply == yes ]]; then
-            rm -rf -- "./$base"
-        else
-            status_msg "cancelled"
-            return 1
-        fi
-    fi
-
     spinner_begin "restoring $base"
-    if mv -- "$batch_dir/$base" ./ 2>/dev/null; then
+    if mv -- "$batch_dir/$base" "$original" 2>/dev/null; then
         spinner_end
-        status_msg "restored: $base"
-        rmdir -- "$batch_dir" 2>/dev/null
+        status_msg "restored: $original"
+        if ! find "$batch_dir" -mindepth 1 ! -name '.omnish-manifest' -print -quit 2>/dev/null | grep -q .; then
+            rm -f -- "$manifest"
+            rmdir -- "$batch_dir" 2>/dev/null
+        fi
     else
         spinner_end
         status_msg "restore failed"
+        return 1
     fi
 }
