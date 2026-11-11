@@ -122,6 +122,7 @@ loop_read_dir() {
     [[ ${#loop_list[@]} -eq 0 ]] && loop_list=("empty")
     ((loop_total=${#loop_list[@]}-1))
     loop_prev_idx=$prev_idx
+    return 0
 }
 
 # ===============================================================
