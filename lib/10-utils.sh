@@ -184,7 +184,7 @@ cleanup() {
     # Restore terminal only when a controlling TTY can actually be opened.
     local tty_fd
     if { exec {tty_fd}<>/dev/tty; } 2>/dev/null; then
-        printf '\e[?25h\e[0m' >&"$tty_fd" 2>/dev/null || true
+        printf '\e[?25h\e[0m' >&"$tty_fd" || true
         stty sane <&"$tty_fd" 2>/dev/null || true
         exec {tty_fd}>&-
     fi
