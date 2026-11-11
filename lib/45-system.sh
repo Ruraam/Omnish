@@ -57,31 +57,36 @@ _sys_detect() {
 # ===============================================================
 # Display helpers
 # ===============================================================
-_sys_show() {
-    # $1 = title; rest = command. Shows first 500 lines (for lists).
-    local title="$1"; shift
-    local out
-    out=$("$@" 2>&1 | head -500)
-    if [[ -z "$out" ]]; then
-        status_msg "$title: (no output)"
-        return
+_sys_display_text() {
+    local title="$1" body="$2"
+    [[ -n "$body" ]] || body="$title: (no output)"
+
+    if [[ "${OMNISH_BACKEND:-fzf}" != "fzf" ]] || ! command -v fzf >/dev/null 2>&1; then
+        if command -v less >/dev/null 2>&1; then
+            printf '%s\n' "$body" | less -R
+        else
+            printf '%s\n' "$body"
+            read -rsn 1 -t 30 _ </dev/tty 2>/dev/null || true
+        fi
+        return 0
     fi
-    printf '%s\n' "$out" | fzf --ansi --no-sort --no-info \
+
+    printf '%s\n' "$body" | fzf --ansi --no-sort --no-info \
         --header "$title | Esc: back" \
         --preview-window 'hidden' \
         --bind 'enter:accept' >/dev/null
 }
 
+_sys_show() {
+    # $1 = title; rest = command. Shows first 500 lines (for lists).
+    local title="$1"; shift
+    local out
+    out=$("$@" 2>&1 | head -500)
+    _sys_display_text "$title" "$out"
+}
+
 _sys_show_file() {
-    local title="$1" body="$2"
-    if [[ -z "$body" ]]; then
-        status_msg "$title: (no output)"
-        return
-    fi
-    printf '%s\n' "$body" | fzf --ansi --no-sort --no-info \
-        --header "$title | Esc: back" \
-        --preview-window 'hidden' \
-        --bind 'enter:accept' >/dev/null
+    _sys_display_text "$1" "$2"
 }
 
 _sys_run() {
@@ -90,18 +95,13 @@ _sys_run() {
     local out rc
     out=$("$@" 2>&1)
     rc=$?
-    if [[ -z "$out" ]]; then
-        out="$title: (no output)"
-    fi
     if (( rc != 0 )); then
         printf -v out '%s\n\n[omnish] command failed (exit status: %s)' "$out" "$rc"
     fi
-    printf '%s\n' "$out" | tail -100 | fzf --ansi --no-sort --no-info \
-        --header "$title | Esc: back" \
-        --preview-window 'hidden' \
-        --bind 'enter:accept' >/dev/null
+    _sys_display_text "$title" "$(printf '%s\n' "$out" | tail -100)"
     return "$rc"
 }
+
 # ===============================================================
 # Privilege helpers
 # ===============================================================
@@ -379,7 +379,7 @@ _sys_mod_available() {
 _sys_mod_list() {
     _sys_detect
     if (( _SYS_HAS_LSMOD )); then
-        if (( _SYS_HAS_MODINFO )); then
+        if (( _SYS_HAS_MODINFO )) && [[ "${OMNISH_BACKEND:-fzf}" == "fzf" ]] && command -v fzf >/dev/null 2>&1; then
             lsmod | tail -n +2 | \
                 fzf --no-sort --no-info \
                     --header "Loaded modules | Enter: info | Esc: back" \
@@ -452,7 +452,7 @@ _sys_mod_unload() {
     local name
     if (( _SYS_HAS_LSMOD )); then
         name=$(lsmod | tail -n +2 | awk '{print $1}' | \
-            fzf --header "Unload module | Esc: cancel" --no-sort --no-info)
+            _omnish_select "Unload module | Enter: select | Esc: cancel")
         [[ -z "$name" ]] && return
     else
         cmd_line "module to unload: "
@@ -564,7 +564,7 @@ _sys_modules_menu() {
     while :; do
         local header choice
         header="Modules (mode=$root_hint, lsmod=$_SYS_HAS_LSMOD modprobe=$_SYS_HAS_MODPROBE dmesg=$_SYS_HAS_DMESG) | Esc: back"
-        choice=$(cat <<'EOF' | fzf --no-sort --no-info --header "$header" --preview-window hidden
+        choice=$(cat <<'EOF' | _omnish_select "$header"
 loaded   List loaded modules (with info preview)
 info     Show modinfo of a module
 depends  Show dependencies of a module
@@ -614,7 +614,7 @@ _sys_bubble_rollback() {
         return
     fi
     local target
-    target=$(printf '%s\n' "$gens" | fzf --header "Select generation to rollback to | Esc: cancel" --ansi)
+    target=$(printf '%s\n' "$gens" | _omnish_select "Select generation to rollback to | Enter: select | Esc: cancel")
     [[ -z "$target" ]] && return
     local id
     id=$(printf '%s' "$target" | awk '{print $1}')
@@ -682,8 +682,7 @@ ${widget_line}Esc: back"
         menu+=$'shell    Spawn an interactive shell\n'
 
         local choice
-        choice=$(printf '%s' "$menu" | fzf --no-sort --no-info \
-            --header "$header" --preview-window hidden)
+        choice=$(printf '%s' "$menu" | _omnish_select "$header")
 
         [[ -z "$choice" ]] && return
         case "${choice%% *}" in
