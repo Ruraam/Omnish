@@ -60,17 +60,20 @@ _omnish_select() {
         case "$key" in
             $'\e')
                 seq=''
-                if IFS= read -rsn1 -t 0.05 seq </dev/tty 2>/dev/null; then
-                    if [[ "$seq" == '[' ]]; then
-                        key=''
-                        IFS= read -rsn1 -t 0.05 key </dev/tty 2>/dev/null || :
-                        case "$key" in
-                            A) (( selected > 0 )) && ((selected--)) ;;
-                            B) (( selected + 1 < ${#options[@]} )) && ((selected++)) ;;
-                            H) selected=0 ;;
-                            F) selected=$((${#options[@]} - 1)) ;;
-                        esac
-                    fi
+                if IFS= read -rsn1 -t 0.20 seq </dev/tty 2>/dev/null; then
+                    case "$seq" in
+                        '['|'O')
+                            key=''
+                            IFS= read -rsn1 -t 0.20 key </dev/tty 2>/dev/null || :
+                            case "$key" in
+                                A) (( selected > 0 )) && ((selected--)) ;;
+                                B) (( selected + 1 < ${#options[@]} )) && ((selected++)) ;;
+                                H) selected=0 ;;
+                                F) selected=$((${#options[@]} - 1)) ;;
+                            esac
+                            ;;
+                        *) : ;;
+                    esac
                 else
                     break
                 fi
