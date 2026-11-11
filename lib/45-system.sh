@@ -93,8 +93,11 @@ _sys_run() {
     # $1 = title; rest = command. Preserve the real command's exit status.
     local title="$1"; shift
     local out rc
-    out=$("$@" 2>&1)
-    rc=$?
+    if out=$("$@" 2>&1); then
+        rc=0
+    else
+        rc=$?
+    fi
     if (( rc != 0 )); then
         printf -v out '%s\n\n[omnish] command failed (exit status: %s)' "$out" "$rc"
     fi
