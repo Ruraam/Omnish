@@ -222,9 +222,7 @@ trash_view() {
     local f batch base batch_dir manifest original destination_dir
     f=$(find "$OMNI_TRASH" -mindepth 2 -maxdepth 2 ! -name '.omnish-manifest' 2>/dev/null \
         | sed "s|$OMNI_TRASH/||" | head -200 \
-        | fzf --header "Trash: $OMNI_TRASH | Enter: restore | Esc: quit" \
-              --preview 'ls -la -- "$OMNI_TRASH/{}" 2>/dev/null' \
-              --preview-window 'right:50%:wrap')
+        | _omnish_select "Trash: $OMNI_TRASH | Enter: select | Esc: cancel")
     [[ -z "$f" ]] && return
 
     batch="${f%%/*}"
