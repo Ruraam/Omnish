@@ -210,8 +210,77 @@ _dua_preview() {
 # [FIX 3] Empty directory no longer loops forever.
 # [FIX 9] ctrl-e works like ctrl-d (trash).
 # ===============================================================
+# Native fallback for the loop backend: no fzf process or dependency.
+_dua_interactive_loop() {
+    local cur="${1:-$PWD}" mode="$DUA_MODE" depth="$DUA_TREE_DEPTH"
+    local selection index path display
+    local -a rows=()
+
+    while :; do
+        rows=()
+        if [[ "$mode" == "tree" ]]; then
+            mapfile -t rows < <(_dua_tree_scan "$cur" "$depth" "$DUA_TREE_LINES" 2>/dev/null)
+        else
+            mapfile -t rows < <(_dua_scan "$cur" 2>/dev/null)
+        fi
+
+        printf '\nDisk Usage [%s] %s\n' "$mode" "$cur"
+        printf 'Enter N: open/descend | u: up | t: toggle view | +/-: depth | r: rescan | q: quit\n\n'
+        if (("${#rows[@]}" == 0)); then
+            printf '  (empty)\n'
+        else
+            local i
+            for i in "${!rows[@]}"; do
+                display="${rows[i]%%$'\t'*}"
+                printf ' %3d) %s\n' "$((i + 1))" "$display"
+            done
+        fi
+        printf '\nChoice: '
+        IFS= read -r selection </dev/tty || return 0
+
+        case "$selection" in
+            q|Q|esc) return 0 ;;
+            u|U)
+                [[ "$cur" != "/" ]] && cur=$(dirname -- "$cur")
+                continue ;;
+            t|T)
+                [[ "$mode" == "tree" ]] && mode="flat" || mode="tree"
+                continue ;;
+            +)
+                (( depth < 10 )) && ((++depth))
+                continue ;;
+            -)
+                (( depth > 1 )) && ((--depth))
+                continue ;;
+            r|R) continue ;;
+        esac
+
+        if [[ "$selection" =~ ^[0-9]+$ ]] && (( selection >= 1 && selection <= ${#rows[@]} )); then
+            index=$((selection - 1))
+            path="${rows[index]#*$'\t'}"
+            [[ -e "$path" || -L "$path" ]] || { printf 'Not found: %s\n' "$path"; continue; }
+
+            if [[ -d "$path" && ! -L "$path" ]]; then
+                cur="$path"
+            else
+                if command -v less >/dev/null 2>&1; then
+                    _dua_preview "$path" | less -R
+                else
+                    _dua_preview "$path"
+                    printf '\nPress Enter to continue...'
+                    IFS= read -r _ </dev/tty || true
+                fi
+            fi
+        fi
+    done
+}
+
 _dua_interactive() {
     local cur="${1:-$PWD}"
+    if [[ "${OMNISH_BACKEND:-fzf}" != "fzf" ]] || ! command -v fzf >/dev/null 2>&1; then
+        _dua_interactive_loop "$cur"
+        return $?
+    fi
     local history=()
     local mode="$DUA_MODE"
     local depth="$DUA_TREE_DEPTH"
