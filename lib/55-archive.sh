@@ -109,7 +109,7 @@ quick_archive() {
     elif [[ "$format" == tar.zst* ]]; then ext=tar.zst; ratio=70
     elif [[ "$format" == zip* ]]; then ext=zip; ratio=85
     else return 1; fi
-    estimate=$((total * ratio / 100)
+    estimate=$((total * ratio / 100))
     base="${sources[0]##*/}"; base="${base%.*}"; [[ -n "$base" ]] || base=archive
     output="$PWD/$base.$ext"; cmd_reply="$output"
     cmd_line "Save as [$output]: "; [[ -n "$cmd_reply" ]] && output="$cmd_reply"
