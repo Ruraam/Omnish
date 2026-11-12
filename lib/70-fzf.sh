@@ -202,11 +202,49 @@ _omnish_term_restore() {
     tput rmcup >/dev/tty 2>/dev/null || true
 }
 
+# Return the adaptive preview width in columns. Explicit user widths are
+# honored (and capped to the current layout); the default follows the same
+# portrait/landscape split as the loop backend.
+fzf_preview_width() {
+    local columns="${1:-${COLUMNS:-80}}"
+    local lines="${2:-${LINES:-24}}"
+    local requested="${3:-${OMNISH_PREVIEW_WIDTH:-}}"
+    local max_preview width
+
+    if (( columns > lines )); then
+        max_preview=$(( columns * 60 / 100 ))
+    else
+        max_preview=$(( columns * 50 / 100 ))
+    fi
+    (( max_preview < 1 )) && max_preview=1
+
+    case "$requested" in
+        *%)
+            if [[ "$requested" =~ ^([0-9]+)%$ ]]; then
+                width=$(( columns * ${BASH_REMATCH[1]} / 100 ))
+            else
+                width=$max_preview
+            fi
+            ;;
+        *)
+            if [[ "$requested" =~ ^[0-9]+$ ]]; then
+                width=$requested
+            else
+                width=$max_preview
+            fi
+            ;;
+    esac
+
+    (( width < 1 )) && width=1
+    (( width > max_preview )) && width=$max_preview
+    printf '%s\\n' "$width"
+}
+
 fzf_binds() {
     local path="$1"
     local header_text margin_preview
     header_text=$(f_header_text)
-    margin_preview="${OMNISH_PREVIEW_WIDTH:-$(cat "$MARGIN_PREVIEW" 2>/dev/null || true)}"
+    margin_preview=$(fzf_preview_width "$COLUMNS" "$LINES")
 
     local hidepreview=''
     [[ -f "$CACHE_OMNISH_DIR/hidepreview" ]] && hidepreview=':hidden'
@@ -217,18 +255,6 @@ fzf_binds() {
     if (( COLUMNS < 70 || LINES < 10 )); then
         preview_window='hidden'
     else
-        local max_preview
-        if (( COLUMNS > LINES )); then
-            max_preview=$(( COLUMNS * 60 / 100 ))
-        else
-            max_preview=$(( COLUMNS * 50 / 100 ))
-        fi
-        (( max_preview < 1 )) && max_preview=1
-        if [[ "$margin_preview" =~ ^[0-9]+$ ]]; then
-            (( margin_preview > max_preview )) && margin_preview=$max_preview
-        else
-            margin_preview=$max_preview
-        fi
         preview_window="right:${margin_preview}:noborder${hidepreview}"
     fi
 
@@ -239,7 +265,7 @@ fzf_binds() {
     # the whole terminal with the prompt at the top — the standard file
     # manager layout (ranger/lf/yazi/nnn). No trailing 2>&1 anymore: fzf
     # warnings must not end up in $selected.
-    local result
+    local result fzf_status=0
     result=$(safe_ls "$path" | \
         OMNISH_PREVIEW_BASE="$path" \
         FZF_DEFAULT_OPTS='' \
@@ -282,20 +308,16 @@ fzf_binds() {
             --bind 'alt-h:execute-silent({ [ ! -f "$CACHE_OMNISH_DIR/showhidden" ] && touch "$CACHE_OMNISH_DIR/showhidden"; } || rm -f "$CACHE_OMNISH_DIR/showhidden")+top+accept' \
             --bind 'alt-l:execute-silent({ [ ! -f "$CACHE_OMNISH_DIR/longfilemanager" ] && touch "$CACHE_OMNISH_DIR/longfilemanager"; } || rm -f "$CACHE_OMNISH_DIR/longfilemanager")+top+accept' \
             --bind 'ctrl-p:toggle-preview+execute-silent({ [ ! -f "$CACHE_OMNISH_DIR/hidepreview" ] && touch "$CACHE_OMNISH_DIR/hidepreview"; } || rm -f "$CACHE_OMNISH_DIR/hidepreview")+top+accept' \
-            --bind 'esc:execute(echo "$PWD" > "$CACHE_OMNISH_DIR/last_folder"; echo 130 > "$TMP_OMNISH_DIR/signal")+abort' \
-            --bind 'ctrl-q:execute(echo "$PWD" > "$CACHE_OMNISH_DIR/last_folder"; echo 130 > "$TMP_OMNISH_DIR/signal")+abort' \
-            --bind 'ctrl-c:execute(echo "$PWD" > "$CACHE_OMNISH_DIR/last_folder"; echo 130 > "$TMP_OMNISH_DIR/signal")+abort' \
+            --bind 'esc:abort,ctrl-q:abort,ctrl-c:abort' \
             --preview 'bash "$OMNISH_ENTRYPOINT" --preview-file "$OMNISH_PREVIEW_BASE"/{}' \
             --preview-window "$preview_window" \
             --expect=enter,right)
 
-    selected=$(clean_path "$result" | sed 's|^\./||g')
-    if [[ -f "$TMP_OMNISH_DIR/signal" ]]; then
-        local code
-        code=$(cat "$TMP_OMNISH_DIR/signal")
-        rm -f "$TMP_OMNISH_DIR/signal"
-        (( code == 130 )) && return 1
-    fi
+    # fzf returns 130 for abort (Esc, Ctrl-Q or Ctrl-C). Propagate that
+    # cancellation to fzf_main instead of restarting an empty selection.
+    (( fzf_status == 130 )) && return 1
+
+    selected=$(clean_path "$result" | sed 's|^\\./||g')
     return 0
 }
 
