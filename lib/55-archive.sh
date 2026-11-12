@@ -4,7 +4,7 @@
 archive_is_supported() {
     case "${1##*/}" in
         *.tar|*.tar.*|*.tgz|*.tzst|*.txz|*.tbz2|*.zip|*.deb|*.apk|*.lpk|*.rar|*.7z|*.iso|*.cab|*.ar) return 0 ;;
-        *) [[ "$(_archive_kind "$1")" != unknown ]] ;;
+        *) [[ -f "$1" ]] && [[ "$(_archive_kind "$1")" != unknown ]] ;;
     esac
 }
 _archive_magic_hex() {
@@ -66,6 +66,20 @@ _archive_kind() {
         else printf unknown; fi
         return
     fi
+
+    # Keep compatibility with older variants, but validate the suffix hint
+    # with the matching reader before accepting the container.
+    case "$name" in
+        *.zip|*.apk)
+            if command -v unzip >/dev/null 2>&1 && unzip -Z1 "$archive" >/dev/null 2>&1; then printf zip; else printf unknown; fi
+            return ;;
+        *.rar|*.7z|*.iso|*.cab|*.ar)
+            if _archive_libarchive_valid "$archive"; then printf libarchive; else printf unknown; fi
+            return ;;
+        *.deb)
+            if command -v dpkg-deb >/dev/null 2>&1 && dpkg-deb --info "$archive" >/dev/null 2>&1; then printf deb; else printf unknown; fi
+            return ;;
+    esac
     printf unknown
 }
 # ULPM LPK v5: zstd-compressed SquashFS with an optional 104-byte
