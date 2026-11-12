@@ -244,7 +244,7 @@ def scratchpad_editor_tty_test(tmp):
     data_home = os.path.join(tmp, "scratchpad-data")
     editor = os.path.join(tmp, "fake-editor")
     with open(editor, "w", encoding="utf-8") as stream:
-        stream.write("#!/usr/bin/env bash\nstty -echo -icanon min 1 time 0 </dev/tty\nprintf 'editor ran\\n' >> \"$2\"\n")
+        stream.write("#!/usr/bin/env bash\nstty -echo -icanon min 1 time 0 </dev/tty\nprintf 'EDITOR-READY\\n' >/dev/tty\nIFS= read -rsn 1 key </dev/tty\nprintf 'editor key: %s\\n' \"$key\" >> \"$2\"\nprintf 'EDITOR-DONE\\n' >/dev/tty\n")
     os.chmod(editor, 0o700)
 
     pid, master = pty.fork()
@@ -262,11 +262,14 @@ before=$(stty -g </dev/tty)
 scratchpad_edit
 after=$(stty -g </dev/tty)
 [[ "$before" == "$after" ]] || { printf 'EDITOR-TERMIOS-MISMATCH\n'; exit 21; }
-grep -q 'editor ran' "$XDG_DATA_HOME/omnish/scratchpad.md"
+grep -q 'editor key: z' "$XDG_DATA_HOME/omnish/scratchpad.md"
 printf 'EDITOR-TTY-CLEAN\n'
 '''
         os.execvpe("bash", ["bash", "-c", script], env)
     try:
+        read_until(master, b"EDITOR-READY", 5)
+        os.write(master, b"z")
+        read_until(master, b"EDITOR-DONE", 5)
         output = read_until(master, b"EDITOR-TTY-CLEAN", 5)
         status = wait_child(pid, 5)
         if not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 0:

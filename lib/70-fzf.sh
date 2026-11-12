@@ -211,10 +211,10 @@ fzf_binds() {
     local hidepreview=''
     [[ -f "$CACHE_OMNISH_DIR/hidepreview" ]] && hidepreview=':hidden'
 
-    # Keep a useful list width on compact terminals. The loop backend uses
-    # the same 90-column breakpoint before showing its side-by-side preview.
+    # Keep the side preview available on typical 80-column terminals;
+    # hide it only when the terminal is genuinely too narrow or too short.
     local preview_window
-    if (( COLUMNS < 90 || LINES < 10 )); then
+    if (( COLUMNS < 70 || LINES < 10 )); then
         preview_window='hidden'
     else
         if [[ "$margin_preview" =~ ^[0-9]+$ ]]; then

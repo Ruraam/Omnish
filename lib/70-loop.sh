@@ -224,7 +224,7 @@ loop_draw() {
     rows=$(( LINES - 2 ))
     (( rows < 1 )) && rows=1
 
-    if (( COLUMNS >= 90 && LINES >= 10 )) && [[ ! -f "$CACHE_OMNISH_DIR/hidepreview" ]]; then
+    if (( COLUMNS >= 70 && LINES >= 10 )) && [[ ! -f "$CACHE_OMNISH_DIR/hidepreview" ]]; then
         split=$(( COLUMNS * 45 / 100 ))
         list_w=$(( split - 2 ))
         prev_w=$(( COLUMNS - split - 2 ))
@@ -351,7 +351,7 @@ loop_handle_key() {
 
         # === Scratchpad ===
         F2)      loop_reset_terminal
-                 scratchpad_open "$(loop_current_path)"
+                 scratchpad_open "$(loop_current_path)" </dev/tty >/dev/tty 2>&1
                  loop_setup_terminal
                  loop_show_help=0
                  loop_draw full
