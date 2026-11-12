@@ -10,6 +10,8 @@ SRC="$WORK/source tree"
 HOME_DIR="$WORK/home with spaces"
 LOCAL="$HOME_DIR/.local"
 mkdir -p -- "$SRC" "$HOME_DIR" "$SRC/lib"
+[[ -x "$ROOT/omnish" ]] \
+    || { printf 'FAIL: repository entrypoint lost its executable bit\n' >&2; exit 1; }
 cp -- "$ROOT/install.sh" "$ROOT/omnish" "$SRC/"
 cp -R -- "$ROOT/lib/." "$SRC/lib/"
 
