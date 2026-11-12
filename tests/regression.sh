@@ -47,21 +47,21 @@ export CHAFA_ARGS_LOG="$WORK/chafa-args.log"
 PATH="$WORK/image-bin:$PATH"
 
 unset OMNISH_IMAGE_FORMAT KITTY_PID
-TERM=xterm-kitty
+export TERM=xterm-kitty
 [[ "$(_preview_detect_image_format)" == kitty ]] || fail "Kitty was not detected from TERM"
-KITTY_PID=123
-TERM=xterm-kitty
+export KITTY_PID=123
+export TERM=xterm-kitty
 [[ "$(_preview_detect_image_format)" == kitty ]] || fail "Kitty was not detected from KITTY_PID"
 unset KITTY_PID
-TERM=xterm-256color
-TERM_PROGRAM=iTerm.app
+export TERM=xterm-256color
+export TERM_PROGRAM=iTerm.app
 [[ "$(_preview_detect_image_format)" == iterm ]] || fail "iTerm2 was not detected passively"
-TERM_PROGRAM=WezTerm
+export TERM_PROGRAM=WezTerm
 [[ "$(_preview_detect_image_format)" == sixel ]] || fail "WezTerm Sixel capability was not detected passively"
 unset TERM_PROGRAM
-TERM=foot
+export TERM=foot
 [[ "$(_preview_detect_image_format)" == sixel ]] || fail "foot Sixel capability was not detected passively"
-TERM=xterm-256color
+export TERM=xterm-256color
 [[ "$(_preview_detect_image_format)" == symbols ]] || fail "unknown terminal did not use safe symbols fallback"
 
 # loop must always use symbols/vhalf/24bit, even if Kitty is advertised.
@@ -90,7 +90,7 @@ chmod +x "$WORK/image-bin/chafa"
 _preview_image "$WORK/fixture.png" 48 18 || fail "fzf did not fall back after a protocol render failure"
 grep -Fq -- '--format=symbols' "$CHAFA_ARGS_LOG" || fail "fzf protocol failure did not fall back to symbols"
 unset KITTY_PID OMNISH_PREVIEW_BACKEND
-TERM=xterm-256color
+export TERM=xterm-256color
 
 # Caller-owned runtime directories must survive cleanup.
 cleanup
