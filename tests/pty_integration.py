@@ -63,43 +63,68 @@ set -euo pipefail
 source "$OMNISH_TEST_ROOT/lib/00-config.sh"
 source "$OMNISH_TEST_ROOT/lib/10-utils.sh"
 source "$OMNISH_TEST_ROOT/lib/70-loop.sh"
-loop_read_dir() { loop_list=("fixture"); loop_total=0; loop_prev_idx=0; }
+loop_read_dir() { loop_list=("fixture-a" "fixture-b"); loop_total=1; loop_prev_idx=0; }
 loop_rebuild_visual_marks() { :; }
 loop_draw() {
     get_term_size
-    printf '%s %s\n' "$LINES" "$COLUMNS" >> "$OMNISH_TEST_TRACE"
+    printf 'DRAW %s %s %s\n' "$LINES" "$COLUMNS" "$loop_scroll" >> "$OMNISH_TEST_TRACE"
     printf 'DRAW\n'
 }
-loop_main "$1"
+before=$(stty -g </dev/tty)
+(loop_main "$1")
+after=$(stty -g </dev/tty)
+[[ "$before" == "$after" ]] || { printf 'TERMIOS-EXIT-MISMATCH\n'; exit 8; }
+stty -icanon -echo min 1 time 0 </dev/tty
+if IFS= read -rsn 1 -t 0.15 leaked </dev/tty 2>/dev/null; then
+    stty "$before" </dev/tty
+    printf 'INPUT-LEAK\n'
+    exit 9
+fi
+stty "$before" </dev/tty
+printf 'EXIT-CLEAN\n'
 '''
         os.execvpe("bash", ["bash", "-c", script, "pty-loop", target], env)
     try:
         read_until(master, b"DRAW", 5)
+        # Navigate first so SIGWINCH is delivered while the UI is in use.
+        os.write(master, b"j")
         deadline = time.monotonic() + 3
-        while not os.path.exists(trace) and time.monotonic() < deadline:
-            time.sleep(0.01)
-        # Change the PTY dimensions; the kernel delivers SIGWINCH to its foreground group.
+        navigated = False
+        while time.monotonic() < deadline:
+            if os.path.exists(trace):
+                with open(trace, encoding="ascii") as stream:
+                    if "DRAW 24 80 1" in stream.read():
+                        navigated = True
+                        break
+            time.sleep(0.02)
+        if not navigated:
+            raise AssertionError("loop backend did not process navigation input")
+        # Change the PTY dimensions during navigation; the kernel delivers SIGWINCH.
         fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 41, 123, 0, 0))
         deadline = time.monotonic() + 3
         resized = False
         while time.monotonic() < deadline:
             if os.path.exists(trace):
                 with open(trace, encoding="ascii") as stream:
-                    if "41 123" in stream.read():
+                    if "DRAW 41 123 1" in stream.read():
                         resized = True
                         break
             time.sleep(0.02)
         if not resized:
             raise AssertionError("loop backend did not redraw using resized PTY dimensions")
-        # Queue a partial CSI sequence behind q; EXIT cleanup must drain it.
+        # Queue an incomplete CSI after q. Cleanup must drain it before the
+        # calling shell resumes, and restore the exact original termios state.
         os.write(master, b"q\x1b[")
+        output = read_until(master, b"EXIT-CLEAN", 5)
         status = wait_child(pid, 5)
         if not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 0:
-            raise AssertionError(f"loop backend exited abnormally: wait status {status}")
+            raise AssertionError(f"loop backend exited abnormally: {output!r}, wait status {status}")
+        if b"INPUT-LEAK" in output or b"TERMIOS-EXIT-MISMATCH" in output:
+            raise AssertionError(f"terminal cleanup regression: {output!r}")
         with open(trace, encoding="ascii") as stream:
             rows = [line.strip() for line in stream if line.strip()]
-        if rows.count("24 80") != 1 or rows.count("41 123") != 1 or len(rows) != 2:
-            raise AssertionError(f"unexpected redraw sequence (duplicate/lost SIGWINCH): {rows}")
+        if rows.count("DRAW 24 80 0") != 1 or rows.count("DRAW 24 80 1") != 1 or rows.count("DRAW 41 123 1") != 1 or len(rows) != 3:
+            raise AssertionError(f"unexpected redraw/navigation sequence: {rows}")
     finally:
         try:
             os.close(master)
