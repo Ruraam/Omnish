@@ -185,7 +185,11 @@ cleanup() {
     local tty_fd
     if { exec {tty_fd}<>/dev/tty; } 2>/dev/null; then
         printf '\e[?25h\e[0m' >&"$tty_fd" || true
-        stty sane <&"$tty_fd" 2>/dev/null || true
+        if [[ -n "${OMNISH_TTY_SAVED_STTY:-}" ]]; then
+            stty "$OMNISH_TTY_SAVED_STTY" <&"$tty_fd" 2>/dev/null || true
+        else
+            stty sane <&"$tty_fd" 2>/dev/null || true
+        fi
         exec {tty_fd}>&-
     fi
     return 0
