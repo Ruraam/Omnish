@@ -520,6 +520,6 @@ cmd_line() { cmd_reply="$WORK/created-quick-archive"; }
 marked_files=("$archive_fixture/nested/file with spaces.txt")
 quick_archive
 [[ -f "$WORK/created-quick-archive.tar.gz" ]] || fail "Quick Archive did not create tar.gz output"
-tar -tzf "$WORK/created-quick-archive.tar.gz" | grep -Fq "file with spaces.txt" || fail "Quick Archive output omitted selected file"
+tar -tzf "$WORK/created-quick-archive.tar.gz" | grep -Fxq "./file with spaces.txt" || fail "Quick Archive did not store a clean relative member path"
 
 printf 'PASS: runtime ownership, file-operation guards, scratchpad and trash restore regressions\n'
