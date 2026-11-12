@@ -101,7 +101,7 @@ _preview_image() {
             symbols='block+border+diagonal+dot+quad+half+braille+geometric+inverted'
             ;;
         balanced)
-            colors=24bit
+            colors=256
             work=5
             color_space=rgb
             extractor=median
