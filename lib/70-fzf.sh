@@ -49,9 +49,10 @@ f_header_text() {
     local lines=${LINES:-0}
     (( lines < 1 )) && lines=$(tput lines 2>/dev/null) && [[ -n "$lines" ]] || lines=24
 
-    if (( lines < 32 )); then
-        printf 'omnish v%s | ?: help | ^X: sys | ^D: trash | Preview: %s | Files: %s' \
-            "$OMNISH_VERSION" "$preview_status" "$marked_status"
+    local columns=${COLUMNS:-0}
+    if (( lines < 32 || columns < 100 )); then
+        printf 'omnish v%s | ?:help | ^X:sys | ^D:trash | %s' \
+            "$OMNISH_VERSION" "$marked_status"
     else
         cat <<EOF
 ╭─ omnish v${OMNISH_VERSION} ─────────────────────────╮
@@ -210,6 +211,20 @@ fzf_binds() {
     local hidepreview=''
     [[ -f "$CACHE_OMNISH_DIR/hidepreview" ]] && hidepreview=':hidden'
 
+    # Keep a useful list width on compact terminals. The loop backend uses
+    # the same 90-column breakpoint before showing its side-by-side preview.
+    local preview_window
+    if (( COLUMNS < 90 || LINES < 10 )); then
+        preview_window='hidden'
+    else
+        if [[ "$margin_preview" =~ ^[0-9]+$ ]]; then
+            local max_preview=$(( COLUMNS * 45 / 100 ))
+            (( max_preview < 1 )) && max_preview=1
+            (( margin_preview > max_preview )) && margin_preview=$max_preview
+        fi
+        preview_window="right:${margin_preview}:noborder${hidepreview}"
+    fi
+
     # [FIX layout 1] Neutralise FZF_DEFAULT_OPTS / FZF_DEFAULT_COMMAND so a
     # shell-level `--height=30%` or custom default command can't shrink or
     # hijack the file manager pane. We pass every option explicitly below.
@@ -263,7 +278,7 @@ fzf_binds() {
             --bind 'ctrl-q:execute(echo "$PWD" > "$CACHE_OMNISH_DIR/last_folder"; echo 130 > "$TMP_OMNISH_DIR/signal")+abort' \
             --bind 'ctrl-c:execute(echo "$PWD" > "$CACHE_OMNISH_DIR/last_folder"; echo 130 > "$TMP_OMNISH_DIR/signal")+abort' \
             --preview 'bash "$OMNISH_ENTRYPOINT" --preview-file "$OMNISH_PREVIEW_BASE"/{}' \
-            --preview-window "right:${margin_preview}:noborder${hidepreview}" \
+            --preview-window "$preview_window" \
             --expect=enter,right)
 
     selected=$(clean_path "$result" | sed 's|^\./||g')
