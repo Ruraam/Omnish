@@ -3,7 +3,7 @@
 
 archive_is_supported() {
     case "${1##*/}" in
-        *.tar|*.tar.gz|*.tgz|*.tar.zst|*.tzst|*.tar.xz|*.txz|*.tar.bz2|*.tbz2|*.zip|*.deb|*.apk|*.lpk) return 0 ;;
+        *.tar|*.tar.*|*.tgz|*.tzst|*.txz|*.tbz2|*.zip|*.deb|*.apk|*.lpk) return 0 ;;
         *) return 1 ;;
     esac
 }
@@ -11,7 +11,7 @@ _archive_kind() {
     case "${1##*/}" in
         *.deb) printf deb ;;
         *.zip|*.apk) printf zip ;;
-        *.tar|*.tar.gz|*.tgz|*.tar.zst|*.tzst|*.tar.xz|*.txz|*.tar.bz2|*.tbz2) printf tar ;;
+        *.tar|*.tar.*|*.tgz|*.tzst|*.txz|*.tbz2) printf tar ;;
         *.lpk) tar -tf "$1" >/dev/null 2>&1 && { printf tar; return; }
                command -v unzip >/dev/null 2>&1 && unzip -Z1 "$1" >/dev/null 2>&1 && { printf zip; return; }
                printf unknown ;;
@@ -134,7 +134,10 @@ quick_archive() {
         source_name="${source##*/}"
         tar_args+=(-C "$source_dir" "./$source_name")
     done
-    if [[ -e "$output" ]]; then cmd_yes_no "Overwrite '${output##*/}'?"; [[ "$cmd_reply" == yes ]] || return 0; fi
+    if [[ -e "$output" ]]; then
+        cmd_yes_no "Overwrite archive?"; [[ "$cmd_reply" == yes ]] || return 0
+        rm -f -- "$output" || { status_msg "cannot replace existing archive"; return 1; }
+    fi
     if [[ "$ext" == tar.gz ]]; then
         if tar -czf "$output" "${tar_args[@]}"; then rc=0; else rc=$?; fi
     elif [[ "$ext" == tar.zst ]]; then
