@@ -287,7 +287,7 @@ fzf_binds() {
             --bind 'tab:toggle+down+execute-silent(bash "$OMNISH_ENTRYPOINT" --mark-file {})' \
             --bind 'shift-tab:toggle+up+execute-silent(bash "$OMNISH_ENTRYPOINT" --mark-file {})' \
             --bind 'space:toggle+execute-silent(bash "$OMNISH_ENTRYPOINT" --mark-file {})' \
-            --bind 'z:execute(bash "$OMNISH_ENTRYPOINT" --archive-create)+top+accept' \
+            --bind 'z,shift-z:execute(bash "$OMNISH_ENTRYPOINT" --archive-create)+top+accept' \
             --bind 'right:accept' \
             --bind 'enter:accept' \
             --bind 'left:top+up+accept' \
