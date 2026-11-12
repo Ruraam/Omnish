@@ -208,7 +208,12 @@ _omnish_term_restore() {
 fzf_preview_width() {
     local columns="${1:-${COLUMNS:-80}}"
     local lines="${2:-${LINES:-24}}"
-    local requested="${3:-${OMNISH_PREVIEW_WIDTH:-}}"
+    local requested
+    if (( $# >= 3 )); then
+        requested="$3"
+    else
+        requested="${OMNISH_PREVIEW_WIDTH:-}"
+    fi
     local max_preview width
 
     if (( columns > lines )); then
