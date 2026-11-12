@@ -76,7 +76,7 @@ _preview_detect_image_format() {
 
     if [[ -n "${KITTY_PID:-}" || "${TERM:-}" == xterm-kitty ]]; then
         printf 'kitty\\n'
-    elif [[ "${TERM_PROGRAM:-}" == iTerm.app || "${LC_TERMINAL:-}" == iTerm2 ]]; then
+    elif [[ "${TERM_PROGRAM:-}" == iTerm.app ]]; then
         printf 'iterm\\n'
     elif [[ "${TERM:-}" == foot* || "${TERM:-}" == wezterm || "${TERM_PROGRAM:-}" == WezTerm ]]; then
         printf 'sixel\\n'
