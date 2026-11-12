@@ -40,7 +40,7 @@ sed 's/OMNISH_VERSION="3.0.0"/OMNISH_VERSION="9.9.9"/' \
 mv -- "$WORK/omnish-new" "$SRC/omnish"
 HOME="$HOME_DIR" PREFIX="$PREFIX" "$SRC/install.sh"
 [[ "$("$PREFIX/bin/omnish" --version)" == *"omnish 9.9.9"* ]]
-leftovers="$(find "$PREFIX/share" -maxdepth 1 \\( -name '.omnish.stage.*' -o -name '.omnish.backup.*' \\) -print -quit)"
+leftovers="$(find "$PREFIX/share" -maxdepth 1 \( -name '.omnish.stage.*' -o -name '.omnish.backup.*' \) -print -quit)"
 [[ -z "$leftovers" ]] \
     || { printf 'FAIL: installer left transaction directories behind: %s\n' "$leftovers" >&2; exit 1; }
 
