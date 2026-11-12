@@ -57,46 +57,51 @@ _sys_detect() {
 # ===============================================================
 # Display helpers
 # ===============================================================
-_sys_show() {
-    # $1 = title; rest = command. Shows first 500 lines (for lists).
-    local title="$1"; shift
-    local out
-    out=$("$@" 2>&1 | head -500)
-    if [[ -z "$out" ]]; then
-        status_msg "$title: (no output)"
-        return
-    fi
-    printf '%s\n' "$out" | fzf --ansi --no-sort --no-info \
-        --header "$title | Esc: back" \
-        --preview-window 'hidden' \
-        --bind 'enter:accept' >/dev/null
-}
-
-_sys_show_file() {
+_sys_display_text() {
     local title="$1" body="$2"
-    if [[ -z "$body" ]]; then
-        status_msg "$title: (no output)"
-        return
+    [[ -n "$body" ]] || body="$title: (no output)"
+
+    if [[ "${OMNISH_BACKEND:-fzf}" != "fzf" ]] || ! command -v fzf >/dev/null 2>&1; then
+        # Do not launch less here: its pager keymap steals arrow keys from
+        # the loop UI and leaves the user at a confusing "(END)" prompt.
+        printf '%s\n\n%s\n' "$title" "$body"
+        printf '\nPress Enter to return...' 
+        IFS= read -r _ </dev/tty 2>/dev/null || :
+        return 0
     fi
+
     printf '%s\n' "$body" | fzf --ansi --no-sort --no-info \
         --header "$title | Esc: back" \
         --preview-window 'hidden' \
         --bind 'enter:accept' >/dev/null
 }
 
-_sys_run() {
-    # $1 = title; rest = command. Shows LAST 100 lines (for actions).
+_sys_show() {
+    # $1 = title; rest = command. Shows first 500 lines (for lists).
     local title="$1"; shift
     local out
-    out=$("$@" 2>&1 | tail -100)
-    if [[ -z "$out" ]]; then
-        status_msg "$title: (no output)"
-        return
+    out=$("$@" 2>&1 | head -500)
+    _sys_display_text "$title" "$out"
+}
+
+_sys_show_file() {
+    _sys_display_text "$1" "$2"
+}
+
+_sys_run() {
+    # $1 = title; rest = command. Preserve the real command's exit status.
+    local title="$1"; shift
+    local out rc
+    if out=$("$@" 2>&1); then
+        rc=0
+    else
+        rc=$?
     fi
-    printf '%s\n' "$out" | fzf --ansi --no-sort --no-info \
-        --header "$title | Esc: back" \
-        --preview-window 'hidden' \
-        --bind 'enter:accept' >/dev/null
+    if (( rc != 0 )); then
+        printf -v out '%s\n\n[omnish] command failed (exit status: %s)' "$out" "$rc"
+    fi
+    _sys_display_text "$title" "$(printf '%s\n' "$out" | tail -100)"
+    return "$rc"
 }
 
 # ===============================================================
@@ -123,6 +128,62 @@ _sys_need_root_or_sudo() {
 # ===============================================================
 # Individual system queries
 # ===============================================================
+# Render the complete system overview in one screen and wait only once.
+_sys_all_report() {
+    local model cores cpu sensors_out memory disk network report
+
+    model=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2- | xargs)
+    [[ -n "$model" ]] || model=$(uname -m)
+    cores=$(nproc 2>/dev/null || grep -c '^processor' /proc/cpuinfo 2>/dev/null || echo 1)
+    cpu=$(top -b -n1 2>/dev/null | awk '/Cpu\(s\)/ { print; exit }')
+    [[ -n "$cpu" ]] || cpu="CPU usage unavailable"
+
+    if command -v sensors >/dev/null 2>&1; then
+        sensors_out=$(sensors 2>&1)
+        [[ -n "$sensors_out" ]] || sensors_out="No sensor data available"
+    else
+        sensors_out="sensors not installed (lm-sensors)"
+    fi
+
+    if command -v free >/dev/null 2>&1; then
+        memory=$(free -h 2>&1)
+    else
+        memory=$(grep -E 'MemTotal|MemFree|MemAvailable|Buffers|Cached' /proc/meminfo 2>/dev/null)
+    fi
+    [[ -n "$memory" ]] || memory="Memory information unavailable"
+
+    disk=$(df -h 2>&1 | head -80)
+    [[ -n "$disk" ]] || disk="Disk information unavailable"
+
+    if command -v ip >/dev/null 2>&1; then
+        network=$(ip -br addr show 2>&1 | grep -v ' lo ' || :)
+        network+=$'\n\n'"$(ip route 2>&1 | head -10)"
+    elif command -v ifconfig >/dev/null 2>&1; then
+        network=$(ifconfig 2>&1 | grep -E 'inet |^[a-z]' || :)
+    else
+        network="Network tools unavailable (ip/ifconfig)"
+    fi
+    [[ -n "$network" ]] || network="No network interfaces found"
+
+    report="CPU
+Model: ${model:-unknown}
+Cores: ${cores:-unknown}
+$cpu
+
+Sensors
+$sensors_out
+
+Memory
+$memory
+
+Disk
+$disk
+
+Network
+$network"
+
+    _sys_display_text "System overview" "$report"
+}
 _sys_cpu() {
     local model usage nproc
     model=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2- | xargs)
@@ -286,8 +347,8 @@ _sys_pkg_update() {
             _sys_run "ulpm update" ulpm update ;;
         apt)
             _sys_need_root_or_sudo || return
-            _sys_run "apt update && upgrade" bash -c \
-                '_sys_sudo env DEBIAN_FRONTEND=noninteractive apt-get update && _sys_sudo env DEBIAN_FRONTEND=noninteractive apt-get upgrade -y'
+            _sys_run "apt update" _sys_sudo env DEBIAN_FRONTEND=noninteractive apt-get update || return
+            _sys_run "apt upgrade" _sys_sudo env DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
             ;;
         dnf|yum)
             _sys_need_root_or_sudo || return
@@ -376,7 +437,7 @@ _sys_mod_available() {
 _sys_mod_list() {
     _sys_detect
     if (( _SYS_HAS_LSMOD )); then
-        if (( _SYS_HAS_MODINFO )); then
+        if (( _SYS_HAS_MODINFO )) && [[ "${OMNISH_BACKEND:-fzf}" == "fzf" ]] && command -v fzf >/dev/null 2>&1; then
             lsmod | tail -n +2 | \
                 fzf --no-sort --no-info \
                     --header "Loaded modules | Enter: info | Esc: back" \
@@ -449,7 +510,7 @@ _sys_mod_unload() {
     local name
     if (( _SYS_HAS_LSMOD )); then
         name=$(lsmod | tail -n +2 | awk '{print $1}' | \
-            fzf --header "Unload module | Esc: cancel" --no-sort --no-info)
+            _omnish_select "Unload module | Enter: select | Esc: cancel")
         [[ -z "$name" ]] && return
     else
         cmd_line "module to unload: "
@@ -469,6 +530,12 @@ _sys_mod_blacklist() {
     cmd_line "module to blacklist: "
     name="$cmd_reply"
     [[ -z "$name" ]] && return
+    # The name is written into a root-owned modprobe configuration file.
+    # Reject whitespace, separators and newlines to prevent directive injection.
+    if [[ ! "$name" =~ ^[A-Za-z0-9_-]+$ ]]; then
+        status_msg "invalid module name"
+        return 2
+    fi
 
     if (( _SYS_IS_ROOT )) && [[ -w "/etc/modprobe.d" ]]; then
         cmd_yes_no "Write 'blacklist $name' to $_SYS_MOD_BLACKLIST_SYS?"
@@ -555,7 +622,7 @@ _sys_modules_menu() {
     while :; do
         local header choice
         header="Modules (mode=$root_hint, lsmod=$_SYS_HAS_LSMOD modprobe=$_SYS_HAS_MODPROBE dmesg=$_SYS_HAS_DMESG) | Esc: back"
-        choice=$(cat <<'EOF' | fzf --no-sort --no-info --header "$header" --preview-window hidden
+        choice=$(cat <<'EOF' | _omnish_select "$header"
 loaded   List loaded modules (with info preview)
 info     Show modinfo of a module
 depends  Show dependencies of a module
@@ -605,7 +672,7 @@ _sys_bubble_rollback() {
         return
     fi
     local target
-    target=$(printf '%s\n' "$gens" | fzf --header "Select generation to rollback to | Esc: cancel" --ansi)
+    target=$(printf '%s\n' "$gens" | _omnish_select "Select generation to rollback to | Enter: select | Esc: cancel")
     [[ -z "$target" ]] && return
     local id
     id=$(printf '%s' "$target" | awk '{print $1}')
@@ -673,17 +740,12 @@ ${widget_line}Esc: back"
         menu+=$'shell    Spawn an interactive shell\n'
 
         local choice
-        choice=$(printf '%s' "$menu" | fzf --no-sort --no-info \
-            --header "$header" --preview-window hidden)
+        choice=$(printf '%s' "$menu" | _omnish_select "$header")
 
         [[ -z "$choice" ]] && return
         case "${choice%% *}" in
             all)
-                _sys_cpu
-                _sys_sensors
-                _sys_ram
-                _sys_disk
-                _sys_net
+                _sys_all_report
                 ;;
             cpu)      _sys_cpu ;;
             cpu-mon)
@@ -732,7 +794,7 @@ _sys_services_menu() {
     while :; do
         local header choice
         header="Services (init=$_SYS_INIT) | Esc: back"
-        choice=$(cat <<'EOF' | fzf --no-sort --no-info --header "$header" --preview-window hidden
+        choice=$(cat <<'EOF' | _omnish_select "$header"
 list     List all services
 running  List running services
 status   Show status of a service
@@ -771,7 +833,7 @@ _sys_packages_menu() {
     while :; do
         local header choice
         header="Packages (manager=$_SYS_PKG) | Esc: back"
-        choice=$(cat <<'EOF' | fzf --no-sort --no-info --header "$header" --preview-window hidden
+        choice=$(cat <<'EOF' | _omnish_select "$header"
 list     List installed packages
 search   Search the repository
 install  Install a package

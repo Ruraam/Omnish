@@ -18,17 +18,28 @@
 # Terminal state
 # ===============================================================
 loop_setup_terminal() {
+    # Capture the exact state once. External tools may temporarily use the
+    # terminal, but every return to the loop must preserve this original state.
+    if [[ -z "${OMNISH_TTY_SAVED_STTY:-}" ]]; then
+        OMNISH_TTY_SAVED_STTY=$(stty -g </dev/tty 2>/dev/null) || return 1
+    fi
     printf '\e[?1049h\e[?7l\e[?25l\e[2J'
-    stty -echo 2>/dev/null
+    stty -echo -icanon min 1 time 0 </dev/tty 2>/dev/null
 }
 
 loop_reset_terminal() {
     printf '\e[?7h\e[?25h\e[2J\e[;r\e[?1049l'
-    stty echo 2>/dev/null
+    if [[ -n "${OMNISH_TTY_SAVED_STTY:-}" ]]; then
+        stty "${OMNISH_TTY_SAVED_STTY}" </dev/tty 2>/dev/null
+    else
+        stty sane </dev/tty 2>/dev/null
+    fi
 }
 
 loop_clear_scroll() {
-    printf '\e[1;%sH\e[J\e[1;%sr' "$((LINES-1))" "$((LINES-1))"
+    local bottom=${LINES:-24}
+    (( bottom > 1 )) && (( bottom-=1 )) || bottom=1
+    printf '\e[1;%sH\e[J\e[1;%sr' "$bottom" "$bottom"
 }
 
 loop_hide_cursor() { printf '\e[?25l'; }
@@ -54,6 +65,17 @@ loop_reload_marks_from_disk() {
     marked_files=()
     [[ -f "$MARKED_FILES_FILE" ]] && mapfile -t marked_files < "$MARKED_FILES_FILE" 2>/dev/null
     ((${#marked_files[@]})) && [[ -z "${marked_files[0]}" ]] && marked_files=()
+    return 0
+}
+
+# Keep symlinks as independently markable entries; canonicalize other paths.
+_loop_mark_identity() {
+    local path="$1"
+    if [[ -L "$path" ]]; then
+        printf '%s' "$path"
+    else
+        realpath -- "$path" 2>/dev/null || printf '%s' "$path"
+    fi
 }
 
 loop_rebuild_visual_marks() {
@@ -65,9 +87,10 @@ loop_rebuild_visual_marks() {
     local i real
     for i in "${!loop_list[@]}"; do
         [[ -z "${loop_list[i]}" || "${loop_list[i]}" == "empty" ]] && continue
-        real=$(realpath "${loop_list[i]}" 2>/dev/null) || continue
+        real=$(_loop_mark_identity "${loop_list[i]}") || continue
         [[ -n "${mark_set[$real]:-}" ]] && loop_marks[$i]="${loop_list[i]}"
     done
+    return 0
 }
 
 # ===============================================================
@@ -82,23 +105,27 @@ loop_read_dir() {
     local base="$PWD"
     [[ "$base" == "/" ]] && base=""
 
+    # Keep the caller's shell options intact. Also force dotglob off for
+    # the default listing, even if the caller enabled it before this function.
+    local nullglob_was_set=0 dotglob_was_set=0
+    shopt -q nullglob && nullglob_was_set=1
+    shopt -q dotglob && dotglob_was_set=1
+
     local -a entries=()
     shopt -s nullglob
-    if [[ -f "$CACHE_OMNISH_DIR/showhidden" ]]; then
-        shopt -s dotglob
-        entries=("$base"/*)
-        shopt -u dotglob
-    else
-        entries=("$base"/*)
-    fi
-    shopt -u nullglob
+    shopt -u dotglob
+    [[ -f "$CACHE_OMNISH_DIR/showhidden" ]] && shopt -s dotglob
+    entries=("$base"/*)
+
+    if (( nullglob_was_set )); then shopt -s nullglob; else shopt -u nullglob; fi
+    if (( dotglob_was_set )); then shopt -s dotglob; else shopt -u dotglob; fi
 
     for item in "${entries[@]}"; do
         [[ -e "$item" || -L "$item" ]] || continue
         if [[ -d "$item" ]]; then
             dirs+=("$item")
             [[ "$item" == "$OLDPWD" ]] && prev_idx=$idx
-            ((idx++))
+            ((idx+=1))
         else
             files+=("$item")
         fi
@@ -106,8 +133,9 @@ loop_read_dir() {
 
     loop_list=("${dirs[@]}" "${files[@]}")
     [[ ${#loop_list[@]} -eq 0 ]] && loop_list=("empty")
-    ((loop_total=${#loop_list[@]}-1))
+    loop_total=$(( ${#loop_list[@]} - 1 ))
     loop_prev_idx=$prev_idx
+    return 0
 }
 
 # ===============================================================
@@ -172,7 +200,7 @@ loop_draw_preview() {
         visible=$(printf '%s' "$line" | sed 's/\x1b\[[0-9;]*m//g')
         (( ${#visible} > width )) && line="${visible:0:width-1}…"
         printf '\e[%s;%sH%s\e[K' "$((row+1))" "$col" "$line"
-        ((row++))
+        ((row+=1))
     done < "$tmpf"
     rm -f "$tmpf"
 }
@@ -190,10 +218,29 @@ loop_draw() {
     get_term_size
     loop_clear_scroll
 
-    local split=$(( COLUMNS * 45 / 100 ))
-    local list_w=$(( split - 2 ))
-    local prev_w=$(( COLUMNS - split - 2 ))
-    local rows=$(( LINES - 2 ))
+    # Responsive layout: reserve the preview pane only when it can remain
+    # useful. Narrow/short terminals get the full width for the file list.
+    local split list_w prev_w rows
+    rows=$(( LINES - 2 ))
+    (( rows < 1 )) && rows=1
+
+    if (( COLUMNS >= 90 && LINES >= 10 )) && [[ ! -f "$CACHE_OMNISH_DIR/hidepreview" ]]; then
+        split=$(( COLUMNS * 45 / 100 ))
+        list_w=$(( split - 2 ))
+        prev_w=$(( COLUMNS - split - 2 ))
+        (( list_w < 1 )) && list_w=1
+        (( prev_w < 1 )) && prev_w=1
+        loop_preview_visible=1
+    else
+        split=0
+        list_w=$(( COLUMNS - 2 ))
+        (( list_w < 1 )) && list_w=1
+        prev_w=0
+        loop_preview_visible=0
+    fi
+    loop_list_width=$list_w
+    loop_preview_width=$prev_w
+    loop_rows=$rows
 
     local start=0
     if (( loop_total + 1 > rows )); then
@@ -210,14 +257,13 @@ loop_draw() {
     for (( i=start; i<=loop_total && row<rows; i++ )); do
         printf '\e[%s;1H' "$((row+1))"
         loop_print_line "$i" "$list_w"
-        ((row++))
+        ((row+=1))
     done
 
-    for (( row=0; row<rows; row++ )); do
-        printf '\e[%s;%sH\e[2m│\e[m' "$((row+1))" "$split"
-    done
-
-    if [[ ! -f "$CACHE_OMNISH_DIR/hidepreview" ]]; then
+    if (( loop_preview_visible )); then
+        for (( row=0; row<rows; row++ )); do
+            printf '\e[%s;%sH\e[2m│\e[m' "$((row+1))" "$split"
+        done
         loop_draw_preview "$((split+2))" "$prev_w" "$rows"
     fi
 
@@ -234,7 +280,7 @@ loop_status_line() {
     local mark_count=0
     local k
     for k in "${!loop_marks[@]}"; do
-        [[ -n "${loop_marks[k]:-}" ]] && ((mark_count++))
+        [[ -n "${loop_marks[k]:-}" ]] && ((mark_count+=1))
     done
     (( mark_count > 0 )) && mark_info="[${mark_count} marked] "
     (( ${loop_show_help:-0} )) && mark_info="[HELP] ${mark_info}"
@@ -254,9 +300,9 @@ loop_handle_key() {
 
     if [[ "$k" == $'\e' ]]; then
         local c1='' c2=''
-        if IFS= read -rsn 1 -t 0.05 c1 2>/dev/null; then
+        if IFS= read -rsn 1 -t 0.08 -u "$OMNISH_TTY_FD" c1 2>/dev/null; then
             if [[ "$c1" == '[' || "$c1" == 'O' ]]; then
-                if IFS= read -rsn 1 -t 0.05 c2 2>/dev/null; then
+                if IFS= read -rsn 1 -t 0.08 -u "$OMNISH_TTY_FD" c2 2>/dev/null; then
                     case "${c1}${c2}" in
                         '[A'|'OA') k='UP' ;;
                         '[B'|'OB') k='DOWN' ;;
@@ -278,8 +324,8 @@ loop_handle_key() {
 
     case "$k" in
         # === Navigation ===
-        j|DOWN)  (( loop_scroll < loop_total )) && (( loop_scroll++ )) ; loop_show_help=0 ; loop_draw ;;
-        k|UP)    (( loop_scroll > 0 )) && (( loop_scroll-- )) ; loop_show_help=0 ; loop_draw ;;
+        j|DOWN)  (( loop_scroll < loop_total )) && (( loop_scroll+=1 )) ; loop_show_help=0 ; loop_draw ;;
+        k|UP)    (( loop_scroll > 0 )) && loop_scroll=$(( loop_scroll - 1 )) ; loop_show_help=0 ; loop_draw ;;
         g)       loop_scroll=0 ; loop_show_help=0 ; loop_draw ;;
         G)       loop_scroll=$loop_total ; loop_show_help=0 ; loop_draw ;;
         l|RIGHT|'')  loop_open_selected ;;
@@ -291,13 +337,13 @@ loop_handle_key() {
         # === Multi-select ===
         $'\t')
                  loop_mark_current_silent
-                 (( loop_scroll < loop_total )) && (( loop_scroll++ ))
+                 (( loop_scroll < loop_total )) && (( loop_scroll+=1 ))
                  loop_show_help=0
                  loop_draw
                  ;;
         SHIFT_TAB)
                  loop_mark_current_silent
-                 (( loop_scroll > 0 )) && (( loop_scroll-- ))
+                 (( loop_scroll > 0 )) && loop_scroll=$(( loop_scroll - 1 ))
                  loop_show_help=0
                  loop_draw
                  ;;
@@ -420,7 +466,7 @@ loop_toggle_mark() {
     local entry="${loop_list[loop_scroll]:-}"
     [[ -z "$entry" || "$entry" == "empty" ]] && return
     local real
-    real=$(realpath "$entry" 2>/dev/null) || real="$entry"
+    real=$(_loop_mark_identity "$entry")
 
     local -a new_marked=()
     local found=0 p
@@ -452,7 +498,7 @@ loop_mark_all_only() {
     local i real
     for (( i=0; i<=loop_total; i++ )); do
         [[ "${loop_list[i]}" == "empty" ]] && continue
-        real=$(realpath "${loop_list[i]}" 2>/dev/null) || real="${loop_list[i]}"
+        real=$(_loop_mark_identity "${loop_list[i]}")
         kept+=("$real")
     done
     marked_files=("${kept[@]}")
@@ -475,13 +521,13 @@ loop_mark_all_toggle() {
     local -a current_reals=() i real
     for (( i=0; i<=loop_total; i++ )); do
         [[ "${loop_list[i]}" == "empty" ]] && continue
-        real=$(realpath "${loop_list[i]}" 2>/dev/null) || real="${loop_list[i]}"
+        real=$(_loop_mark_identity "${loop_list[i]}")
         current_reals+=("$real")
     done
 
     local marked_count=0
     for real in "${current_reals[@]}"; do
-        [[ -n "${current_marked[$real]:-}" ]] && ((marked_count++))
+        [[ -n "${current_marked[$real]:-}" ]] && ((marked_count+=1))
     done
 
     if (( ${#current_reals[@]} > 0 && marked_count == ${#current_reals[@]} )); then
@@ -565,12 +611,33 @@ loop_rename_current() {
 
 loop_paste() {
     (( ${#marked_files[@]} == 0 )) && { status_msg "nothing marked"; loop_draw; return; }
-    spinner_begin "pasting ${#marked_files[@]} item(s)"
-    cp -rf -- "${marked_files[@]}" "$PWD" 2>/dev/null \
-        && { spinner_end; status_msg "pasted ${#marked_files[@]}"; } \
-        || { spinner_end; status_msg "paste failed"; }
-    marked_files=()
-    sync_marked_files
+    _fileops_has_duplicate_basenames "${marked_files[@]}" && {
+        status_msg "duplicate basenames in selection; paste separately"
+        loop_draw
+        return
+    }
+
+    local -a existing=()
+    local f
+    for f in "${marked_files[@]}"; do
+        [[ -e "$PWD/${f##*/}" || -L "$PWD/${f##*/}" ]] && existing+=("${f##*/}")
+    done
+    if (( ${#existing[@]} > 0 )); then
+        cmd_yes_no "Overwrite ${#existing[@]} existing item(s)?"
+        [[ $cmd_reply == yes ]] || { status_msg "cancelled"; loop_draw; return; }
+    fi
+
+    local total=${#marked_files[@]}
+    spinner_begin "pasting $total item(s)"
+    if cp -rf -- "${marked_files[@]}" "$PWD" 2>/dev/null; then
+        spinner_end
+        status_msg "pasted $total item(s)"
+        marked_files=()
+        sync_marked_files
+    else
+        spinner_end
+        status_msg "paste failed (marks kept)"
+    fi
     loop_show_help=0
     loop_draw full
 }
@@ -612,7 +679,7 @@ loop_search() {
     loop_show_cursor
     printf '\e[%s;1H\e[K/' "$LINES"
     local query='' ch
-    while IFS= read -rsn 1 -t 2 ch; do
+    while IFS= read -rsn 1 -t 2 -u "$OMNISH_TTY_FD" ch; do
         case "$ch" in
             $'\e'|'') break ;;
             $'\177'|$'\b') query="${query%?}" ;;
@@ -628,7 +695,7 @@ loop_search() {
     done
     if (( ${#filtered[@]} > 0 )); then
         loop_list=("${filtered[@]}")
-        (( loop_total=${#loop_list[@]}-1 ))
+        loop_total=$(( ${#loop_list[@]} - 1 ))
         loop_scroll=0
     fi
     loop_draw
@@ -647,7 +714,7 @@ loop_stat_current() {
     [[ -z "$entry" || "$entry" == "empty" ]] && return
     loop_reset_terminal
     stat -- "$entry" 2>/dev/null || ls -la -- "$entry"
-    read -rsn 1 -p "Press any key…"
+    read -rsn 1 -u "$OMNISH_TTY_FD" -p "Press any key…"
     loop_setup_terminal
     loop_show_help=0
     loop_draw
@@ -682,8 +749,31 @@ loop_go_dir() {
 # [FIX 2] fatal errors go to /dev/tty
 # [FIX 9] reload marked_files from disk at start
 # ===============================================================
+loop_flush_input() {
+    [[ -n "${OMNISH_TTY_FD:-}" ]] || return 0
+    local pending=""
+    while IFS= read -rsn 1 -t 0.01 -u "$OMNISH_TTY_FD" pending 2>/dev/null; do
+        pending=""
+    done
+    return 0
+}
+
+loop_process_resize() {
+    (( ${loop_resize_pending:-0} )) || return 0
+    loop_resize_pending=0
+    get_term_size
+    loop_draw
+    return 0
+}
+
 loop_main() {
     local target="${1:-$PWD}"
+    local OMNISH_TTY_FD
+
+    if [[ ! -r /dev/tty || ! -w /dev/tty ]] || ! exec {OMNISH_TTY_FD}<>/dev/tty; then
+        printf "omnish: interactive loop backend requires a controlling TTY\\n" >&2
+        exit 1
+    fi
 
     if [[ ! -d "$target" ]]; then
         printf 'omnish: %s: not a directory\n' "$target" >/dev/tty 2>/dev/null || \
@@ -705,11 +795,21 @@ loop_main() {
     # [FIX 9] load persisted marks from disk before first draw
     loop_reload_marks_from_disk
 
+    # Save the caller's exact termios state before entering raw mode. Keep it
+    # in shell scope so both the EXIT trap and cleanup() can restore it.
+    unset OMNISH_TTY_SAVED_STTY
+    OMNISH_TTY_SAVED_STTY=$(stty -g </dev/tty 2>/dev/null) || {
+        printf 'omnish: unable to read terminal settings\n' >/dev/tty 2>/dev/null
+        exec {OMNISH_TTY_FD}>&-
+        exit 1
+    }
+
     # [FIX 1] INT/TERM must exit; EXIT fires on natural exit
-    trap 'loop_reset_terminal; cleanup' EXIT
-    trap 'loop_reset_terminal; cleanup; exit 130' INT
-    trap 'loop_reset_terminal; cleanup; exit 143' TERM
-    trap 'get_term_size; loop_draw' WINCH
+    loop_resize_pending=0
+    trap 'loop_reset_terminal; cleanup; exec {OMNISH_TTY_FD}>&-' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    trap 'loop_resize_pending=1' WINCH
 
     loop_setup_terminal
     loop_read_dir
@@ -718,8 +818,8 @@ loop_main() {
 
     local k
     while :; do
-        IFS= read -rsn 1 -t 0.05 k 2>/dev/null || { [[ -t 1 ]] || exit 1; continue; }
-        [[ -t 1 ]] || exit 1
+        loop_process_resize
+        IFS= read -rsn 1 -t 0.05 -u "$OMNISH_TTY_FD" k 2>/dev/null || continue
         loop_handle_key "$k"
     done
 }

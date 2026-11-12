@@ -8,8 +8,11 @@ SCRIPT="omnish"
 
 # Per-process runtime directory, exported so child actions share UI state.
 if [[ -n "${OMNISH_RUNTIME_DIR:-}" ]]; then
+    # A caller-supplied runtime directory is caller-owned. Omnish must never
+    # recursively remove it during cleanup, even if it created it on demand.
     TMP_OMNISH_DIR="$OMNISH_RUNTIME_DIR"
     [[ -d "$TMP_OMNISH_DIR" ]] || mkdir -p -- "$TMP_OMNISH_DIR" 2>/dev/null
+    OMNISH_RUNTIME_OWNED=0
 else
     _omnish_runtime_base="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}"
     if [[ ! -d "$_omnish_runtime_base" || ! -w "$_omnish_runtime_base" ]]; then
@@ -24,8 +27,10 @@ else
         return 1
     fi
     OMNISH_RUNTIME_DIR="$TMP_OMNISH_DIR"
+    OMNISH_RUNTIME_OWNED=1
     export OMNISH_RUNTIME_DIR
 fi
+export OMNISH_RUNTIME_OWNED
 chmod 700 -- "$TMP_OMNISH_DIR" 2>/dev/null || true
 
 CACHE_OMNISH_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/omnish"
@@ -33,12 +38,13 @@ CONFIG_OMNISH_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/omnish"
 mkdir -p -- "$CACHE_OMNISH_DIR" "$CONFIG_OMNISH_DIR" 2>/dev/null
 
 # --- Persistent state ---
-MARGIN_PREVIEW="$CACHE_OMNISH_DIR/margin_preview"
+MARGIN_PREVIEW_FILE="$CACHE_OMNISH_DIR/margin_preview"
+MARGIN_PREVIEW="$MARGIN_PREVIEW_FILE"
 MARKED_FILES_FILE="$TMP_OMNISH_DIR/marked_files"
 HISTORY_FILE="$CACHE_OMNISH_DIR/dir_history"
 OMNI_CD_FILE="$CACHE_OMNISH_DIR/.omnish_d"
 
-[[ -f "$MARGIN_PREVIEW" ]] || echo 60 > "$MARGIN_PREVIEW" 2>/dev/null
+[[ -f "$MARGIN_PREVIEW_FILE" ]] || echo 60 > "$MARGIN_PREVIEW_FILE" 2>/dev/null
 touch "$MARKED_FILES_FILE" 2>/dev/null
 
 marked_files=()
@@ -70,5 +76,17 @@ if [[ -r "$CONFIG_FILE" ]]; then
 fi
 
 # --- Post-config fixups ---
+# Backward compatibility: the documented MARGIN_PREVIEW=60 setting is a
+# width value, while older internals used MARGIN_PREVIEW as a cache-file path.
+if [[ "$MARGIN_PREVIEW" != "$MARGIN_PREVIEW_FILE" ]]; then
+    if [[ "$MARGIN_PREVIEW" =~ ^[0-9]+%?$ ]]; then
+        OMNISH_PREVIEW_WIDTH="$MARGIN_PREVIEW"
+    else
+        MARGIN_PREVIEW_FILE="$MARGIN_PREVIEW"
+    fi
+fi
+MARGIN_PREVIEW="$MARGIN_PREVIEW_FILE"
+OMNISH_PREVIEW_WIDTH="${OMNISH_PREVIEW_WIDTH:-$(cat "$MARGIN_PREVIEW_FILE" 2>/dev/null || echo 60)}"
+[[ "$OMNISH_PREVIEW_WIDTH" =~ ^[0-9]+%?$ ]] || OMNISH_PREVIEW_WIDTH=60
 [[ -d "$OMNI_TRASH" ]] || mkdir -p "$OMNI_TRASH" 2>/dev/null
 PREVIEW_OPENER="$OMNI_OPENER"

@@ -37,9 +37,11 @@ _preview_dims() {
 
     # [FIX 14] Pane width = MARGIN_PREVIEW (chars or "N%") if set
     local pane_w="$term_cols"
-    if [[ -r "${MARGIN_PREVIEW:-}" ]]; then
-        local margin
+    local margin="${OMNISH_PREVIEW_WIDTH:-}"
+    if [[ -z "$margin" && -r "${MARGIN_PREVIEW:-}" ]]; then
         margin=$(<"$MARGIN_PREVIEW")
+    fi
+    if [[ -n "$margin" ]]; then
         if [[ "$margin" =~ ^([0-9]+)%$ ]]; then
             pane_w=$(( term_cols * ${BASH_REMATCH[1]} / 100 ))
         elif [[ "$margin" =~ ^[0-9]+$ ]]; then

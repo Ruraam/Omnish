@@ -49,9 +49,10 @@ f_header_text() {
     local lines=${LINES:-0}
     (( lines < 1 )) && lines=$(tput lines 2>/dev/null) && [[ -n "$lines" ]] || lines=24
 
-    if (( lines < 32 )); then
-        printf 'omnish v%s | ?: help | ^X: sys | ^D: trash | Preview: %s | Files: %s' \
-            "$OMNISH_VERSION" "$preview_status" "$marked_status"
+    local columns=${COLUMNS:-0}
+    if (( lines < 32 || columns < 100 )); then
+        printf 'omnish v%s | ?:help | ^X:sys | ^D:trash | %s' \
+            "$OMNISH_VERSION" "$marked_status"
     else
         cat <<EOF
 ╭─ omnish v${OMNISH_VERSION} ─────────────────────────╮
@@ -90,11 +91,17 @@ mark_all_files() {
     local f
     if [[ -f "$CACHE_OMNISH_DIR/showhidden" ]]; then
         while IFS= read -r -d '' f; do
-            [[ -e "$f" ]] && all_files+=("$(realpath "$f")")
+            if [[ -e "$f" || -L "$f" ]]; then
+                if [[ -L "$f" ]]; then all_files+=("$PWD/${f#./}")
+                else all_files+=("$(realpath -- "$f")"); fi
+            fi
         done < <(find . -mindepth 1 -maxdepth 1 -print0 2>/dev/null)
     else
         while IFS= read -r -d '' f; do
-            [[ -e "$f" ]] && all_files+=("$(realpath "$f")")
+            if [[ -e "$f" || -L "$f" ]]; then
+                if [[ -L "$f" ]]; then all_files+=("$PWD/${f#./}")
+                else all_files+=("$(realpath -- "$f")"); fi
+            fi
         done < <(find . -mindepth 1 -maxdepth 1 -not -name '.*' -print0 2>/dev/null)
     fi
 }
@@ -165,7 +172,10 @@ my_terminal() {
         konsole) konsole --workdir "$PWD" ;;
         kitty) kitty --directory="$PWD" ;;
         foot) foot --working-directory="$PWD" ;;
-        *) xterm -e bash -c "cd \"$PWD\" && exec $SHELL" ;;
+        *)
+            local shell="$SHELL"
+            [[ -n "$shell" ]] || shell=bash
+            xterm -e "$shell" -lc 'cd -- "$1"; exec "$2" -i' omnish "$PWD" "$shell" ;;
     esac
 }
 
@@ -187,21 +197,33 @@ _ff_ensure_helpfile() {
 # via `execute(...)` don't touch the parent terminal state.
 # ===============================================================
 _omnish_term_restore() {
-    [[ -t 1 ]] || return 0
-    tput cnorm 2>/dev/null || printf '\033[?25h' 2>/dev/null || true
-    tput rmcup 2>/dev/null || true
+    [[ -t 0 || -t 1 || -t 2 ]] || return 0
+    tput cnorm >/dev/tty 2>/dev/null || printf '\033[?25h' >/dev/tty 2>/dev/null || true
+    tput rmcup >/dev/tty 2>/dev/null || true
 }
 
 fzf_binds() {
     local path="$1"
-    local header_text margin_preview dua_key helpfile
+    local header_text margin_preview
     header_text=$(f_header_text)
-    margin_preview=$(cat "$MARGIN_PREVIEW" 2>/dev/null || echo 60)
-    dua_key="ctrl-u"
-    helpfile="$(_ff_ensure_helpfile)"
+    margin_preview="${OMNISH_PREVIEW_WIDTH:-$(cat "$MARGIN_PREVIEW" 2>/dev/null || echo 60)}"
 
     local hidepreview=''
     [[ -f "$CACHE_OMNISH_DIR/hidepreview" ]] && hidepreview=':hidden'
+
+    # Keep a useful list width on compact terminals. The loop backend uses
+    # the same 90-column breakpoint before showing its side-by-side preview.
+    local preview_window
+    if (( COLUMNS < 90 || LINES < 10 )); then
+        preview_window='hidden'
+    else
+        if [[ "$margin_preview" =~ ^[0-9]+$ ]]; then
+            local max_preview=$(( COLUMNS * 45 / 100 ))
+            (( max_preview < 1 )) && max_preview=1
+            (( margin_preview > max_preview )) && margin_preview=$max_preview
+        fi
+        preview_window="right:${margin_preview}:noborder${hidepreview}"
+    fi
 
     # [FIX layout 1] Neutralise FZF_DEFAULT_OPTS / FZF_DEFAULT_COMMAND so a
     # shell-level `--height=30%` or custom default command can't shrink or
@@ -212,6 +234,7 @@ fzf_binds() {
     # warnings must not end up in $selected.
     local result
     result=$(safe_ls "$path" | \
+        OMNISH_PREVIEW_BASE="$path" \
         FZF_DEFAULT_OPTS='' \
         FZF_DEFAULT_COMMAND='' \
         fzf --ansi --multi --no-bold \
@@ -223,38 +246,39 @@ fzf_binds() {
             --marker='✓' \
             --header "$header_text" \
             --prompt "omnish 🔍: " \
-            --bind 'tab:toggle+down' \
-            --bind 'shift-tab:toggle+up' \
+            --bind 'tab:toggle+down+execute-silent(bash "$OMNISH_ENTRYPOINT" --mark-file {})' \
+            --bind 'shift-tab:toggle+up+execute-silent(bash "$OMNISH_ENTRYPOINT" --mark-file {})' \
+            --bind 'space:toggle+execute-silent(bash "$OMNISH_ENTRYPOINT" --mark-file {})' \
             --bind 'right:accept' \
             --bind 'enter:accept' \
             --bind 'left:top+up+accept' \
             --bind 'ctrl-r,f5:top+accept' \
-            --bind "?:preview(cat \"$helpfile\" 2>/dev/null || echo 'help unavailable')" \
-            --bind "ctrl-h:change-preview(cat \"$helpfile\" 2>/dev/null || echo 'help unavailable')+show-preview" \
-            --bind "f1:execute(bash \"$SCRIPT_PATH\" --show-help {})" \
-            --bind "ctrl-x:execute(bash \"$SCRIPT_PATH\" --system-menu)+top+accept" \
-            --bind "ctrl-o:execute(bash \"$SCRIPT_PATH\" --xdg-open {})+top+accept" \
-            --bind "ctrl-v:execute(bash \"$SCRIPT_PATH\" --move-file {})+top+accept" \
-            --bind "ctrl-y:execute(bash \"$SCRIPT_PATH\" --copy-file {})+top+accept" \
-            --bind "alt-n:execute(bash \"$SCRIPT_PATH\" --create-file {})+top+accept" \
-            --bind "ctrl-n:execute(bash \"$SCRIPT_PATH\" --create-directory {})+top+accept" \
-            --bind "ctrl-s:execute(bash \"$SCRIPT_PATH\" --create-symlink {})+top+accept" \
-            --bind "ctrl-d,ctrl-e:execute(bash \"$SCRIPT_PATH\" --delete-file {})+top+accept" \
-            --bind "${dua_key}:execute(bash \"$SCRIPT_PATH\" --dua \"$PWD\")+top+accept" \
-            --bind "alt-u:execute(bash \"$SCRIPT_PATH\" --undo)+top+accept" \
-            --bind "alt-t:execute(bash \"$SCRIPT_PATH\" --trash-view)+top+accept" \
-            --bind "ctrl-g:execute({ [ ! -f \"$TMP_OMNISH_DIR/grep\" ] && bash \"$SCRIPT_PATH\" --search-term; } || rm -f \"$TMP_OMNISH_DIR/grep\")+top+accept" \
-            --bind "alt-a:toggle+execute-silent(bash \"$SCRIPT_PATH\" --mark-file {})" \
-            --bind "alt-x:select-all+execute-silent(bash \"$SCRIPT_PATH\" --mark-all-only)" \
-            --bind "ctrl-a:toggle-all+execute-silent(bash \"$SCRIPT_PATH\" --mark-all-toggle)" \
-            --bind "alt-h:execute-silent({ [ ! -f \"$CACHE_OMNISH_DIR/showhidden\" ] && touch \"$CACHE_OMNISH_DIR/showhidden\"; } || rm -f \"$CACHE_OMNISH_DIR/showhidden\")+top+accept" \
-            --bind "alt-l:execute-silent({ [ ! -f \"$CACHE_OMNISH_DIR/longfilemanager\" ] && touch \"$CACHE_OMNISH_DIR/longfilemanager\"; } || rm -f \"$CACHE_OMNISH_DIR/longfilemanager\")+top+accept" \
-            --bind "ctrl-p:toggle-preview+execute-silent({ [ ! -f \"$CACHE_OMNISH_DIR/hidepreview\" ] && touch \"$CACHE_OMNISH_DIR/hidepreview\"; } || rm -f \"$CACHE_OMNISH_DIR/hidepreview\")+top+accept" \
-            --bind "esc:execute(echo \"$PWD\" > \"$CACHE_OMNISH_DIR/last_folder\"; echo 130 > \"$TMP_OMNISH_DIR/signal\")+abort" \
-            --bind "ctrl-q:execute(echo \"$PWD\" > \"$CACHE_OMNISH_DIR/last_folder\"; echo 130 > \"$TMP_OMNISH_DIR/signal\")+abort" \
-            --bind "ctrl-c:execute(echo \"$PWD\" > \"$CACHE_OMNISH_DIR/last_folder\"; echo 130 > \"$TMP_OMNISH_DIR/signal\")+abort" \
-            --preview "bash \"$SCRIPT_PATH\" --preview-file \"$path/{}\"" \
-            --preview-window "right:${margin_preview}:noborder${hidepreview}" \
+            --bind '?:preview(cat "$TMP_OMNISH_DIR/help.txt" 2>/dev/null || echo "help unavailable")' \
+            --bind 'ctrl-h:change-preview(cat "$TMP_OMNISH_DIR/help.txt" 2>/dev/null || echo "help unavailable")+show-preview' \
+            --bind 'f1:execute(bash "$OMNISH_ENTRYPOINT" --show-help {})' \
+            --bind 'ctrl-x:execute(bash "$OMNISH_ENTRYPOINT" --system-menu)+top+accept' \
+            --bind 'ctrl-o:execute(bash "$OMNISH_ENTRYPOINT" --xdg-open {})+top+accept' \
+            --bind 'ctrl-v:execute(bash "$OMNISH_ENTRYPOINT" --move-file {})+top+accept' \
+            --bind 'ctrl-y:execute(bash "$OMNISH_ENTRYPOINT" --copy-file {})+top+accept' \
+            --bind 'alt-n:execute(bash "$OMNISH_ENTRYPOINT" --create-file {})+top+accept' \
+            --bind 'ctrl-n:execute(bash "$OMNISH_ENTRYPOINT" --create-directory {})+top+accept' \
+            --bind 'ctrl-s:execute(bash "$OMNISH_ENTRYPOINT" --create-symlink {})+top+accept' \
+            --bind 'ctrl-d,ctrl-e:execute(bash "$OMNISH_ENTRYPOINT" --delete-file {})+top+accept' \
+            --bind 'ctrl-u:execute(bash "$OMNISH_ENTRYPOINT" --dua "$PWD")+top+accept' \
+            --bind 'alt-u:execute(bash "$OMNISH_ENTRYPOINT" --undo)+top+accept' \
+            --bind 'alt-t:execute(bash "$OMNISH_ENTRYPOINT" --trash-view)+top+accept' \
+            --bind 'ctrl-g:execute({ [ ! -f "$TMP_OMNISH_DIR/grep" ] && bash "$OMNISH_ENTRYPOINT" --search-term; } || rm -f "$TMP_OMNISH_DIR/grep")+top+accept' \
+            --bind 'alt-a:toggle+execute-silent(bash "$OMNISH_ENTRYPOINT" --mark-file {})' \
+            --bind 'alt-x:select-all+execute-silent(bash "$OMNISH_ENTRYPOINT" --mark-all-only)' \
+            --bind 'ctrl-a:toggle-all+execute-silent(bash "$OMNISH_ENTRYPOINT" --mark-all-toggle)' \
+            --bind 'alt-h:execute-silent({ [ ! -f "$CACHE_OMNISH_DIR/showhidden" ] && touch "$CACHE_OMNISH_DIR/showhidden"; } || rm -f "$CACHE_OMNISH_DIR/showhidden")+top+accept' \
+            --bind 'alt-l:execute-silent({ [ ! -f "$CACHE_OMNISH_DIR/longfilemanager" ] && touch "$CACHE_OMNISH_DIR/longfilemanager"; } || rm -f "$CACHE_OMNISH_DIR/longfilemanager")+top+accept' \
+            --bind 'ctrl-p:toggle-preview+execute-silent({ [ ! -f "$CACHE_OMNISH_DIR/hidepreview" ] && touch "$CACHE_OMNISH_DIR/hidepreview"; } || rm -f "$CACHE_OMNISH_DIR/hidepreview")+top+accept' \
+            --bind 'esc:execute(echo "$PWD" > "$CACHE_OMNISH_DIR/last_folder"; echo 130 > "$TMP_OMNISH_DIR/signal")+abort' \
+            --bind 'ctrl-q:execute(echo "$PWD" > "$CACHE_OMNISH_DIR/last_folder"; echo 130 > "$TMP_OMNISH_DIR/signal")+abort' \
+            --bind 'ctrl-c:execute(echo "$PWD" > "$CACHE_OMNISH_DIR/last_folder"; echo 130 > "$TMP_OMNISH_DIR/signal")+abort' \
+            --preview 'bash "$OMNISH_ENTRYPOINT" --preview-file "$OMNISH_PREVIEW_BASE"/{}' \
+            --preview-window "$preview_window" \
             --expect=enter,right)
 
     selected=$(clean_path "$result" | sed 's|^\./||g')

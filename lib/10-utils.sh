@@ -8,18 +8,103 @@
 #             filename; only fzf's shell-escaping backslashes are removed.
 
 clean_path() {
-    local p="$1"
-    # Strip leading/trailing whitespace
-    p="${p#"${p%%[![:space:]]*}"}"
-    p="${p%"${p##*[![:space:]]}"}"
-    # Strip surrounding single quotes (fzf wraps paths with spaces sometimes)
-    p="${p#\'}"; p="${p%\'}"
-    # Only remove backslashes that escape shell-special chars (fzf escaping).
-    # This preserves legitimate backslashes in filenames.
-    p=$(printf '%s' "$p" | sed 's/\\\([ ()[\]{}!'"'"'"!&;<>|*?#~]\)/\1/g')
-    printf '%s' "$p"
+    # Paths are data, not shell-escaped display strings. In particular, do
+    # not trim whitespace or remove quotes: both are valid filename bytes.
+    printf '%s' "$1"
 }
 
+# Backend-neutral single-choice menu. fzf keeps fuzzy selection; loop mode
+# provides arrow-key navigation with the same Enter/Esc interaction.
+_omnish_select() {
+    local header="${1:-Select}" line choice i key seq saved_stty selected=0
+    local -a options=()
+    while IFS= read -r line; do options+=("$line"); done
+
+    (( ${#options[@]} > 0 )) || return 1
+    if [[ "${OMNISH_BACKEND:-auto}" == "fzf" ]] && command -v fzf >/dev/null 2>&1; then
+        printf '%s\n' "${options[@]}" | fzf --no-sort --no-info --header "$header"
+        return $?
+    fi
+
+    # Keep a numeric fallback for callers without a usable interactive TTY.
+    if [[ ! -r /dev/tty || ! -w /dev/tty ]] || ! saved_stty=$(stty -g </dev/tty 2>/dev/null); then
+        printf '%s\n' "$header" >&2
+        for i in "${!options[@]}"; do
+            printf ' %2d) %s\n' "$((i + 1))" "${options[i]}" >&2
+        done
+        printf 'Select a number (Enter to cancel): ' >&2
+        IFS= read -r choice </dev/tty || return 1
+        [[ "$choice" =~ ^[0-9]+$ ]] || return 1
+        (( choice >= 1 && choice <= ${#options[@]} )) || return 1
+        printf '%s\n' "${options[choice - 1]}"
+        return 0
+    fi
+
+    if ! stty -echo -icanon min 1 time 0 </dev/tty 2>/dev/null; then
+        return 1
+    fi
+
+    while :; do
+        printf '\033[H\033[2J%s\n\n' "$header" >&2
+        for i in "${!options[@]}"; do
+            if (( i == selected )); then
+                printf ' \033[7m > %2d) %s \033[0m\n' "$((i + 1))" "${options[i]}" >&2
+            else
+                printf '   %2d) %s\n' "$((i + 1))" "${options[i]}" >&2
+            fi
+        done
+        printf '\nUp/Down or j/k: move   Enter: select   Esc/q: back\n' >&2
+
+        key=''
+        IFS= read -rsN1 key </dev/tty || break
+        case "$key" in
+            $'\e')
+                seq=''
+                if IFS= read -rsn1 -t 0.20 seq </dev/tty 2>/dev/null; then
+                    case "$seq" in
+                        '['|'O')
+                            key=''
+                            IFS= read -rsn1 -t 0.20 key </dev/tty 2>/dev/null || :
+                            case "$key" in
+                                A) (( selected > 0 )) && ((selected--)) ;;
+                                B) (( selected + 1 < ${#options[@]} )) && ((selected++)) ;;
+                                H) selected=0 ;;
+                                F) selected=$((${#options[@]} - 1)) ;;
+                            esac
+                            ;;
+                        *) : ;;
+                    esac
+                else
+                    break
+                fi
+                ;;
+            k|K) (( selected > 0 )) && ((selected--)) ;;
+            j|J) (( selected + 1 < ${#options[@]} )) && ((selected++)) ;;
+            $'\r'|$'\n')
+                choice="${options[selected]}"
+                stty "$saved_stty" </dev/tty 2>/dev/null || :
+                printf '\033[?25h\033[0m\n' >&2
+                printf '%s\n' "$choice"
+                return 0
+                ;;
+            q|Q) break ;;
+            [1-9])
+                i=$((10#$key - 1))
+                if (( i < ${#options[@]} )); then
+                    choice="${options[i]}"
+                    stty "$saved_stty" </dev/tty 2>/dev/null || :
+                    printf '\033[?25h\033[0m\n' >&2
+                    printf '%s\n' "$choice"
+                    return 0
+                fi
+                ;;
+        esac
+    done
+
+    stty "$saved_stty" </dev/tty 2>/dev/null || :
+    printf '\033[?25h\033[0m\n' >&2
+    return 1
+}
 _human_size() {
     local b=${1:-0}
     if   (( b >= 1073741824 )); then printf '%d.%dG' $((b/1073741824)) $(((b%1073741824)*10/1073741824))
@@ -30,13 +115,42 @@ _human_size() {
 }
 
 get_term_size() {
-    if [[ -t 1 ]]; then
+    if [[ -r /dev/tty && ( -t 0 || -t 1 || -t 2 ) ]]; then
+        read -r LINES COLUMNS < <(stty size </dev/tty 2>/dev/null) || { LINES=24; COLUMNS=80; }
+    elif [[ -t 1 ]]; then
         read -r LINES COLUMNS < <(stty size 2>/dev/null) || { LINES=24; COLUMNS=80; }
     else
         LINES=${LINES:-24}; COLUMNS=${COLUMNS:-80}
     fi
     message_height=$(( LINES / 2 ))
     message_width=$(( COLUMNS / 2 ))
+}
+
+# Drain bytes already queued on the controlling terminal. This prevents
+# partial escape sequences or type-ahead from leaking into the parent shell.
+_omnish_flush_tty_input() {
+    local tty_fd pending='' saved_tty
+    if ! { exec {tty_fd}<>/dev/tty; } 2>/dev/null; then
+        return 0
+    fi
+
+    saved_tty=$(stty -g <&"$tty_fd" 2>/dev/null) || {
+        exec {tty_fd}>&-
+        return 0
+    }
+    # read -t 0 cannot see bytes held by canonical line discipline. Switch
+    # briefly to noncanonical mode, drain the pending input queue, then put
+    # the exact previous termios state back.
+    stty -icanon -echo min 1 time 0 <&"$tty_fd" 2>/dev/null || {
+        exec {tty_fd}>&-
+        return 0
+    }
+    while IFS= read -rsn 1 -t 0.01 -u "$tty_fd" pending 2>/dev/null; do
+        pending=''
+    done
+    stty "$saved_tty" <&"$tty_fd" 2>/dev/null || true
+    exec {tty_fd}>&-
+    return 0
 }
 
 # ===============================================================
@@ -46,6 +160,8 @@ get_term_size() {
 #       Installed by fzf_main() and loop_main() instead.
 # ===============================================================
 cleanup() {
+    _omnish_flush_tty_input
+
     # Kill progress/spinner if 25-progress.sh is loaded
     if declare -F _progress_cleanup >/dev/null 2>&1; then
         _progress_cleanup
@@ -56,12 +172,27 @@ cleanup() {
         printf '%s\n' "$PWD" > "$OMNI_CD_FILE" 2>/dev/null
     fi
 
-    # Remove temp dir last (subcommands must not do this)
-    [[ -d "$TMP_OMNISH_DIR" ]] && rm -rf "$TMP_OMNISH_DIR" 2>/dev/null
+    # Remove only the private directory created by this Omnish process.
+    # Caller-provided OMNISH_RUNTIME_DIR values are never recursively deleted.
+    if [[ "${OMNISH_RUNTIME_OWNED:-0}" == 1
+          && -n "${TMP_OMNISH_DIR:-}"
+          && -d "$TMP_OMNISH_DIR"
+          && ! -L "$TMP_OMNISH_DIR" ]]; then
+        rm -rf -- "$TMP_OMNISH_DIR" 2>/dev/null
+    fi
 
-    # Restore terminal
-    printf '\e[?25h\e[0m' 2>/dev/null
-    stty sane 2>/dev/null
+    # Restore terminal only when a controlling TTY can actually be opened.
+    local tty_fd
+    if { exec {tty_fd}<>/dev/tty; } 2>/dev/null; then
+        printf '\e[?25h\e[0m' >&"$tty_fd" || true
+        if [[ -n "${OMNISH_TTY_SAVED_STTY:-}" ]]; then
+            stty "$OMNISH_TTY_SAVED_STTY" <&"$tty_fd" 2>/dev/null || true
+        else
+            stty sane <&"$tty_fd" 2>/dev/null || true
+        fi
+        exec {tty_fd}>&-
+    fi
+    return 0
 }
 
 # ===============================================================
