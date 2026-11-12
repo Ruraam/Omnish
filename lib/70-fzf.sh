@@ -311,7 +311,7 @@ fzf_binds() {
             --bind 'esc:abort,ctrl-q:abort,ctrl-c:abort' \
             --preview 'bash "$OMNISH_ENTRYPOINT" --preview-file "$OMNISH_PREVIEW_BASE"/{}' \
             --preview-window "$preview_window" \
-            --expect=enter,right)
+            --expect=enter,right) || fzf_status=$?
 
     # fzf returns 130 for abort (Esc, Ctrl-Q or Ctrl-C). Propagate that
     # cancellation to fzf_main instead of restarting an empty selection.
