@@ -12,12 +12,79 @@ _archive_kind() {
         *.deb) printf deb ;;
         *.zip|*.apk) printf zip ;;
         *.tar|*.tar.*|*.tgz|*.tzst|*.txz|*.tbz2) printf tar ;;
-        *.lpk) tar -tf "$1" >/dev/null 2>&1 && { printf tar; return; }
-               command -v unzip >/dev/null 2>&1 && unzip -Z1 "$1" >/dev/null 2>&1 && { printf zip; return; }
-               printf unknown ;;
+        *.lpk)
+            if [[ "$(head -c 4 -- "$1" 2>/dev/null)" == hsqs ]] && command -v unsquashfs >/dev/null 2>&1; then
+                printf lpk
+            elif tar -tf "$1" >/dev/null 2>&1; then
+                printf tar
+            elif command -v unzip >/dev/null 2>&1 && unzip -Z1 "$1" >/dev/null 2>&1; then
+                printf zip
+            else
+                printf unknown
+            fi
+            ;;
         *) printf unknown ;;
     esac
 }
+# ULPM LPK v5: zstd-compressed SquashFS with an optional 104-byte
+# Ed25519 trailer. Omnish only reads the container; it never verifies trust,
+# installs, extracts, or modifies the package.
+_archive_lpk_prepare_view() {
+    local archive="$1" view="$2" size footer_size=104 footer_magic
+    command -v unsquashfs >/dev/null 2>&1 || return 127
+    [[ "$(head -c 4 -- "$archive" 2>/dev/null)" == hsqs ]] || return 1
+    size="$(stat -c '%s' -- "$archive" 2>/dev/null || stat -f '%z' -- "$archive" 2>/dev/null)" || return 1
+    [[ "$size" =~ ^[0-9]+$ ]] || return 1
+    footer_magic=''
+    if (( size >= footer_size )); then
+        footer_magic="$(tail -c "$footer_size" -- "$archive" 2>/dev/null | head -c 8)"
+    fi
+    if [[ "$footer_magic" == ULPM_SIG ]]; then
+        (( size > footer_size )) || return 1
+        head -c "$((size - footer_size))" -- "$archive" > "$view" || return 1
+    else
+        cp -- "$archive" "$view" || return 1
+    fi
+    [[ "$(head -c 4 -- "$view" 2>/dev/null)" == hsqs ]] || { rm -f -- "$view"; return 1; }
+    unsquashfs -s "$view" >/dev/null 2>&1 || { rm -f -- "$view"; return 1; }
+}
+
+_archive_lpk_list() {
+    local archive="$1" view listing rc tmpdir
+    tmpdir="${TMP_OMNISH_DIR:-${TMPDIR:-/tmp}}"
+    mkdir -p -- "$tmpdir" || return 1
+    view="$(mktemp "$tmpdir/omnish-lpk-view.XXXXXX")" || return 1
+    listing="$view.list"
+    if ! _archive_lpk_prepare_view "$archive" "$view"; then
+        rm -f -- "$view" "$listing"
+        return 1
+    fi
+    if unsquashfs -lln "$view" > "$listing" 2>/dev/null; then
+        awk 'NF >= 6 { $1=$2=$3=$4=$5=""; sub(/^[[:space:]]+/, ""); if (substr($0,1,2) == "./") $0=substr($0,3); if ($0 != "") print }' "$listing"
+        rc=$?
+    else
+        rc=1
+    fi
+    rm -f -- "$view" "$listing"
+    return "$rc"
+}
+
+_archive_lpk_stream_member() {
+    local archive="$1" member="$2" view rc tmpdir
+    tmpdir="${TMP_OMNISH_DIR:-${TMPDIR:-/tmp}}"
+    mkdir -p -- "$tmpdir" || return 1
+    view="$(mktemp "$tmpdir/omnish-lpk-view.XXXXXX")" || return 1
+    if ! _archive_lpk_prepare_view "$archive" "$view"; then
+        rm -f -- "$view"
+        return 1
+    fi
+    member="${member#./}"
+    [[ -n "$member" && "$member" != /* && "$member" != *".."* ]] || { rm -f -- "$view"; return 1; }
+    if unsquashfs -cat "$view" "$member"; then rc=0; else rc=$?; fi
+    rm -f -- "$view"
+    return "$rc"
+}
+
 _archive_list_to() {
     local archive="$1" kind
     kind=$(_archive_kind "$archive")
@@ -25,6 +92,7 @@ _archive_list_to() {
         tar) tar -tf "$archive" ;;
         zip) command -v unzip >/dev/null 2>&1 || return 127; unzip -Z1 "$archive" ;;
         deb) command -v dpkg-deb >/dev/null 2>&1 || return 127; dpkg-deb --fsys-tarfile "$archive" | tar -tf - ;;
+        lpk) _archive_lpk_list "$archive" ;;
         *) return 1 ;;
     esac
 }
@@ -35,6 +103,7 @@ _archive_stream_member() {
         tar) tar -xOf "$archive" -- "$member" ;;
         zip) unzip -p "$archive" "$member" ;;
         deb) dpkg-deb --fsys-tarfile "$archive" | tar -xOf - -- "$member" ;;
+        lpk) _archive_lpk_stream_member "$archive" "$member" ;;
         *) return 1 ;;
     esac
 }
