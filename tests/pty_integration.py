@@ -132,6 +132,71 @@ printf 'EXIT-CLEAN\n'
             pass
 
 
+
+def loop_sigterm_mid_escape_test(tmp):
+    target = os.path.join(tmp, "sigterm-target")
+    os.mkdir(target)
+    pidfile = os.path.join(tmp, "ui-pid")
+    pid, master = pty.fork()
+    if pid == 0:
+        env = os.environ.copy()
+        env.update({"OMNISH_TEST_ROOT": ROOT,
+                    "OMNISH_TEST_PID": pidfile,
+                    "OMNISH_RUNTIME_DIR": os.path.join(tmp, "sigterm-runtime"),
+                    "OMNI_CD_ON_EXIT": "0"})
+        script = r'''
+set -euo pipefail
+source "$OMNISH_TEST_ROOT/lib/00-config.sh"
+source "$OMNISH_TEST_ROOT/lib/10-utils.sh"
+source "$OMNISH_TEST_ROOT/lib/70-loop.sh"
+loop_read_dir() { loop_list=("fixture-a" "fixture-b"); loop_total=1; loop_prev_idx=0; }
+loop_rebuild_visual_marks() { :; }
+loop_draw() { printf 'READY\n'; }
+before=$(stty -g </dev/tty)
+(loop_main "$1") &
+ui_pid=$!
+printf '%s\n' "$ui_pid" > "$OMNISH_TEST_PID"
+rc=0
+wait "$ui_pid" || rc=$?
+after=$(stty -g </dev/tty)
+[[ "$rc" == 143 ]] || { printf 'BAD-SIGNAL-STATUS:%s\n' "$rc"; exit 10; }
+[[ "$before" == "$after" ]] || { printf 'TERMIOS-SIGNAL-MISMATCH\n'; exit 11; }
+stty -icanon -echo min 1 time 0 </dev/tty
+if IFS= read -rsn 1 -t 0.15 leaked </dev/tty 2>/dev/null; then
+    stty "$before" </dev/tty
+    printf 'SIGNAL-INPUT-LEAK\n'
+    exit 12
+fi
+stty "$before" </dev/tty
+printf 'SIGTERM-CLEAN\n'
+'''
+        os.execvpe("bash", ["bash", "-c", script, "pty-sigterm", target], env)
+    try:
+        read_until(master, b"READY", 5)
+        deadline = time.monotonic() + 3
+        while not os.path.exists(pidfile) and time.monotonic() < deadline:
+            time.sleep(0.01)
+        if not os.path.exists(pidfile):
+            raise AssertionError("loop backend did not publish its PID")
+        with open(pidfile, encoding="ascii") as stream:
+            ui_pid = int(stream.read().strip())
+        # ESC is consumed as the start of a CSI sequence; terminate while the
+        # backend is waiting for the next byte, not after a completed key.
+        os.write(master, b"\x1b")
+        time.sleep(0.02)
+        os.kill(ui_pid, signal.SIGTERM)
+        output = read_until(master, b"SIGTERM-CLEAN", 5)
+        status = wait_child(pid, 5)
+        if not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 0:
+            raise AssertionError(f"SIGTERM cleanup failed: {output!r}, status={status}")
+        if b"TERMIOS-SIGNAL-MISMATCH" in output or b"SIGNAL-INPUT-LEAK" in output:
+            raise AssertionError(f"SIGTERM terminal restoration regression: {output!r}")
+    finally:
+        try:
+            os.close(master)
+        except OSError:
+            pass
+
 def input_flush_and_termios_test():
     pid, master = pty.fork()
     if pid == 0:
@@ -176,6 +241,8 @@ printf 'FLUSH-CLEAN\\n'
 def main():
     with tempfile.TemporaryDirectory(prefix="omnish-pty-") as tmp:
         loop_resize_and_exit_test(tmp)
+    with tempfile.TemporaryDirectory(prefix="omnish-pty-sigterm-") as tmp:
+        loop_sigterm_mid_escape_test(tmp)
     input_flush_and_termios_test()
     print("PASS: PTY SIGWINCH redraw, queued escape cleanup and termios restoration")
 
