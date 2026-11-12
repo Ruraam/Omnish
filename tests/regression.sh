@@ -514,5 +514,11 @@ archive_index="$(_archive_list_to "$archive_file")"
 [[ "$archive_index" == *"nested/file with spaces.txt"* ]] || fail "tar archive index omitted nested member"
 cp -- "$archive_file" "$WORK/future.lpk"
 [[ "$(_archive_kind "$WORK/future.lpk")" == tar ]] || fail "tar-backed .lpk detection failed"
+_omnish_select() { printf '%s\n' 'tar.gz — compatible'; }
+cmd_line() { cmd_reply="$WORK/created-quick-archive"; }
+marked_files=("$archive_fixture/nested/file with spaces.txt")
+quick_archive
+[[ -f "$WORK/created-quick-archive.tar.gz" ]] || fail "Quick Archive did not create tar.gz output"
+tar -tzf "$WORK/created-quick-archive.tar.gz" | grep -Fq "file with spaces.txt" || fail "Quick Archive output omitted selected file"
 
 printf 'PASS: runtime ownership, file-operation guards, scratchpad and trash restore regressions\n'
