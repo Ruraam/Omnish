@@ -1,12 +1,7 @@
 #!/usr/bin/env bash
-# install.sh — transactional, unprivileged-by-default Omnish installer.
+# install.sh — transactional, user-space-only Omnish installer.
 #
-# Usage:
-#   ./install.sh
-#   PREFIX="$HOME/.local/opt/omnish" ./install.sh
-#
-# Installation is strictly user-scoped: PREFIX must resolve inside HOME.
-# Root execution and system-wide prefixes are intentionally rejected.
+# Installs exclusively into $HOME/.local. No sudo and no configurable prefix.
 
 set -Eeuo pipefail
 
@@ -32,25 +27,25 @@ ROOT="$(cd -P -- "$(dirname -- "$SELF")" >/dev/null 2>&1 && pwd -P)" \
 [[ -f "$ROOT/omnish" && -r "$ROOT/omnish" ]] || _die "source directory is missing readable omnish"
 
 : "${HOME:?HOME must be set}"
-(( EUID != 0 )) || _die "refusing to install as root; run as your normal user without sudo"
 HOME_CANON="$(cd -P -- "$HOME" && pwd -P)" || _die "cannot resolve HOME"
-PREFIX="${PREFIX:-$HOME_CANON/.local}"
-[[ "$PREFIX" == /* ]] || _die "PREFIX must be an absolute path inside HOME"
-# Resolve non-existent components and symlinks before creating anything.
-PREFIX="$(realpath -m -- "$PREFIX" 2>/dev/null)" || _die "cannot resolve PREFIX"
-case "$PREFIX" in
+
+# The destination is fixed: environment variables such as PREFIX cannot
+# redirect the installer outside the invoking account's home directory.
+LOCAL="$(realpath -m -- "$HOME_CANON/.local" 2>/dev/null)" \
+    || _die "cannot resolve user-local installation directory"
+case "$LOCAL" in
     "$HOME_CANON"/*) ;;
-    *) _die "PREFIX must stay inside HOME ($HOME_CANON); system-wide installs are not supported" ;;
+    *) _die "user-local installation directory resolves outside HOME; refusing installation" ;;
 esac
-mkdir -p -- "$PREFIX" || _die "cannot create PREFIX: $PREFIX"
-PREFIX="$(cd -P -- "$PREFIX" && pwd -P)" || _die "cannot resolve PREFIX"
-case "$PREFIX" in
+mkdir -p -- "$LOCAL" || _die "cannot create user-local directory: $LOCAL"
+LOCAL="$(cd -P -- "$LOCAL" && pwd -P)" || _die "cannot resolve user-local directory"
+case "$LOCAL" in
     "$HOME_CANON"/*) ;;
-    *) _die "resolved PREFIX escaped HOME; refusing installation" ;;
+    *) _die "resolved user-local directory escaped HOME; refusing installation" ;;
 esac
-mkdir -p -- "$PREFIX/bin" "$PREFIX/share" || _die "cannot create PREFIX directories: $PREFIX"
-BIN="$PREFIX/bin"
-SHARE="$PREFIX/share/omnish"
+mkdir -p -- "$LOCAL/bin" "$LOCAL/share" || _die "cannot create user-local directories: $LOCAL"
+BIN="$LOCAL/bin"
+SHARE="$LOCAL/share/omnish"
 
 # Never replace a directory (including a symlink to a directory) with a file.
 if [[ -d "$BIN/omnish" ]]; then
@@ -111,8 +106,8 @@ trap 'exit 130' INT
 trap 'exit 143' TERM HUP
 
 # Build on the destination filesystem so activation is a same-filesystem rename.
-stage="$(mktemp -d "$PREFIX/share/.omnish.stage.XXXXXX")" \
-    || _die "cannot create staging directory under $PREFIX/share"
+stage="$(mktemp -d "$LOCAL/share/.omnish.stage.XXXXXX")" \
+    || _die "cannot create staging directory under $LOCAL/share"
 mkdir -p -- "$stage/lib"
 
 cp -R -- "$ROOT/lib/." "$stage/lib/" || _die "failed to stage lib/"
@@ -144,7 +139,7 @@ ln -s -- "$SHARE/omnish" "$link_tmp" || _die "cannot prepare launcher symlink"
 
 # Keep rollback copies until both the application tree and launcher are live.
 if [[ -e "$SHARE" || -L "$SHARE" ]]; then
-    backup_share="$(mktemp -d "$PREFIX/share/.omnish.backup.XXXXXX")" \
+    backup_share="$(mktemp -d "$LOCAL/share/.omnish.backup.XXXXXX")" \
         || _die "cannot create installation backup path"
     rmdir -- "$backup_share"
     mv -- "$SHARE" "$backup_share" || _die "cannot back up current installation"

@@ -142,10 +142,10 @@ omnish                       # auto: fzf when available, otherwise loop
 
 Omnish is intentionally **user-space only**.
 
-- No `sudo`.
-- No root installation.
+- No `sudo` required.
 - No writes to `/usr`, `/opt` or other system directories.
-- The installer rejects root execution and any custom prefix that resolves outside your home directory.
+- The destination is fixed at `$HOME/.local`; `PREFIX` is ignored.
+- Works in regular Linux sessions and in Termux/proot. In proot, the files stay inside the container user's home.
 
 ### 1. Get the source
 
@@ -177,20 +177,6 @@ export PATH="$HOME/.local/bin:$PATH"
 ```
 
 Then reload your shell or run `source ~/.bashrc`.
-
-### Optional: choose another prefix inside HOME
-
-A custom prefix is supported only when its resolved path remains inside your home directory:
-
-```bash
-PREFIX="$HOME/.local/opt/omnish" ./install.sh
-```
-
-Use the same prefix when uninstalling:
-
-```bash
-PREFIX="$HOME/.local/opt/omnish" ./uninstall.sh
-```
 
 ### Uninstall
 
