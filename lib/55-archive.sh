@@ -79,7 +79,8 @@ _archive_lpk_stream_member() {
         return 1
     fi
     member="${member#./}"
-    [[ -n "$member" && "$member" != /* && "$member" != *".."* ]] || { rm -f -- "$view"; return 1; }
+    [[ -n "$member" && "$member" != /* ]] || { rm -f -- "$view"; return 1; }
+    case "/$member/" in */../*) rm -f -- "$view"; return 1 ;; esac
     if unsquashfs -cat "$view" "$member"; then rc=0; else rc=$?; fi
     rm -f -- "$view"
     return "$rc"
@@ -115,6 +116,7 @@ archive_browse() {
     [[ -f "$archive" ]] || { status_msg "archive not found"; return 1; }
     kind=$(_archive_kind "$archive")
     [[ "$kind" != unknown ]] || { status_msg "unsupported archive"; return 1; }
+    [[ "$kind" != lpk ]] || status_msg "ULPM LPK read-only view; embedded signature is not verified"
     _archive_list_to "$archive" > "$index" || { rm -f -- "$index"; status_msg "cannot read archive"; return 1; }
     mapfile -t members < "$index"; rm -f -- "$index"
     while :; do
