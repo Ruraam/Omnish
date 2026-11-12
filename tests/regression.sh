@@ -64,15 +64,25 @@ export TERM=foot
 export TERM=xterm-256color
 [[ "$(_preview_detect_image_format)" == symbols ]] || fail "unknown terminal did not use safe symbols fallback"
 
-# loop must always use symbols/vhalf/24bit, even if Kitty is advertised.
+# loop must remain textual, but use the high-detail Chafa glyph and color pipeline.
 : > "$CHAFA_ARGS_LOG"
 KITTY_PID=123
 OMNISH_PREVIEW_BACKEND=loop
+OMNISH_IMAGE_QUALITY=high
 _preview_image "$WORK/fixture.png" 40 16 || fail "loop Chafa preview failed"
 grep -Fq -- '--format=symbols' "$CHAFA_ARGS_LOG" || fail "loop did not force symbols"
-grep -Fq -- '--symbols=vhalf' "$CHAFA_ARGS_LOG" || fail "loop did not use vhalf symbols"
+grep -Fq -- '--symbols=block+border+diagonal+dot+quad+half+braille+geometric+inverted' "$CHAFA_ARGS_LOG" || fail "loop did not enable detailed glyphs"
 grep -Fq -- '--colors=24bit' "$CHAFA_ARGS_LOG" || fail "loop did not force 24bit colour"
+grep -Fq -- '--work=9' "$CHAFA_ARGS_LOG" || fail "high quality did not use Chafa work level 9"
+grep -Fq -- '--color-space=din99d' "$CHAFA_ARGS_LOG" || fail "high quality did not use perceptual color space"
+grep -Fq -- '--color-extractor=median' "$CHAFA_ARGS_LOG" || fail "high quality did not use median color extraction"
 ! grep -Eq -- '--format=(kitty|sixel|iterm)' "$CHAFA_ARGS_LOG" || fail "loop emitted a graphical protocol"
+: > "$CHAFA_ARGS_LOG"
+OMNISH_IMAGE_QUALITY=fast
+_preview_image "$WORK/fixture.png" 40 16 || fail "fast loop Chafa preview failed"
+grep -Fq -- '--work=2' "$CHAFA_ARGS_LOG" || fail "fast quality did not reduce Chafa work"
+grep -Fq -- '--colors=16' "$CHAFA_ARGS_LOG" || fail "fast quality did not reduce color count"
+OMNISH_IMAGE_QUALITY=high
 
 # fzf can use Kitty directly; a failed protocol falls back to safe symbols.
 : > "$CHAFA_ARGS_LOG"

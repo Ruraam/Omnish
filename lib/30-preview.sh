@@ -88,37 +88,80 @@ _preview_detect_image_format() {
 _preview_image() {
     local file="$1" width="$2" height="$3"
     local backend="${OMNISH_PREVIEW_BACKEND:-${OMNISH_BACKEND:-auto}}"
-    local format quality colors
+    local format quality colors work color_space extractor symbols
     format=$(_preview_detect_image_format)
     quality="${OMNISH_IMAGE_QUALITY:-high}"
 
-    # loop_draw_preview reads and clips this output one line at a time.
-    # Never send Kitty/Sixel/iTerm escape streams through that text pipeline.
+    case "$quality" in
+        high)
+            colors=24bit
+            work=9
+            color_space=din99d
+            extractor=median
+            symbols='block+border+diagonal+dot+quad+half+braille+geometric+inverted'
+            ;;
+        balanced)
+            colors=24bit
+            work=5
+            color_space=rgb
+            extractor=median
+            symbols='block+border+diagonal+dot+quad+half+braille+geometric+inverted'
+            ;;
+        fast)
+            colors=16
+            work=2
+            color_space=rgb
+            extractor=average
+            symbols='block+border+half+vhalf'
+            ;;
+        *)
+            quality=high
+            colors=24bit
+            work=9
+            color_space=din99d
+            extractor=median
+            symbols='block+border+diagonal+dot+quad+half+braille+geometric+inverted'
+            ;;
+    esac
+
+    # loop_draw_preview clips output line by line. Keep it strictly textual,
+    # but use a richer glyph set than vhalf for substantially more detail.
     if [[ "$backend" == loop ]]; then
+        if chafa --format=symbols --symbols="$symbols" --colors="$colors" \
+            --work="$work" --color-space="$color_space" \
+            --color-extractor="$extractor" --size="${width}x${height}" \
+            -- "$file" 2>/dev/null; then
+            return 0
+        fi
+        # Older Chafa builds may not support every quality option/glyph class.
         chafa --format=symbols --symbols=vhalf --colors=24bit \
             --size="${width}x${height}" -- "$file" 2>/dev/null
         return $?
     fi
 
-    case "$quality" in
-        high) colors=24bit ;;
-        balanced) colors=256 ;;
-        fast) colors=16 ;;
-        *) colors=24bit ;;
-    esac
     [[ "$format" == symbols && "${COLORTERM:-}" != *truecolor* && "${COLORTERM:-}" != *24bit* ]] && {
         [[ "$quality" == high ]] && colors=256
     }
 
     # Graphical protocols are emitted directly by Chafa to fzf's preview
-    # process. There is no Bash line clipping, folding or command substitution.
+    # process. No Bash line clipping/folding touches these escape streams.
     if [[ "$format" != symbols ]]; then
-        if chafa --format="$format" --size="${width}x${height}" -- "$file" 2>/dev/null; then
+        if chafa --format="$format" --work="$work" \
+            --color-space="$color_space" --color-extractor="$extractor" \
+            --size="${width}x${height}" -- "$file" 2>/dev/null; then
             return 0
         fi
         # A stale or inaccurate environment hint must never break previews.
     fi
 
+    if chafa --format=symbols --symbols="$symbols" --colors="$colors" \
+        --work="$work" --color-space="$color_space" \
+        --color-extractor="$extractor" --size="${width}x${height}" \
+        -- "$file" 2>/dev/null; then
+        return 0
+    fi
+
+    # Compatibility fallback for older Chafa releases.
     chafa --format=symbols --symbols=vhalf --colors="$colors" \
         --size="${width}x${height}" -- "$file" 2>/dev/null
 }
