@@ -93,6 +93,16 @@ _archive_lpk_stream_member() {
     return "$rc"
 }
 
+# Reject archive member paths that could escape the virtual archive root.
+# Browsing is read-only, but filtering unsafe names also keeps navigation sane.
+_archive_member_is_safe() {
+    local member="${1#./}"
+    [[ -n "$member" && "$member" != /* ]] || return 1
+    case "/$member/" in
+        */../*) return 1 ;;
+    esac
+    return 0
+}
 _archive_list_to() {
     local archive="$1" kind
     kind=$(_archive_kind "$archive")
@@ -134,8 +144,7 @@ archive_browse() {
         local -A seen=()
         for rel in "${members[@]}"; do
             rel="${rel#./}"
-            [[ -z "$rel" || "$rel" == /* ]] && continue
-            case "/$rel/" in */../*) continue ;; esac
+            _archive_member_is_safe "$rel" || continue
             [[ "$rel" == "$prefix"* ]] || continue
             child="${rel#"$prefix"}"; [[ -n "$child" ]] || continue
             if [[ "$child" == */* ]]; then

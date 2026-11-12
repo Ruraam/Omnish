@@ -212,7 +212,7 @@ The uninstaller removes the application and its launcher. It deliberately keeps 
 | Recursive search | ripgrep (`rg`) |
 | Archive support | tar; unzip for ZIP/APK; dpkg-deb for DEB; `unsquashfs` for ULPM SquashFS LPK; optional `bsdtar` (libarchive) for RAR, 7z, ISO, CAB and AR when supported by the installed libarchive build; zip and zstd for optional creation formats |
 
-Quick Archive's CI includes real 7z, ISO-9660, CAB and ar fixtures. RAR is checked for fail-closed handling of malformed input; a genuine RAR fixture is not generated because the Ubuntu runner's free toolchain does not provide a RAR encoder. Actual RAR browsing remains dependent on the installed libarchive build and its RAR reader support.
+Quick Archive's CI includes real 7z, ISO-9660, CAB, ar and RAR3 fixtures. The RAR3 fixture is a tiny CC0 test archive pinned to an upstream commit; actual RAR browsing still depends on the installed libarchive build and its RAR reader support. Security tests cover malformed containers, traversal and absolute member paths, read-only inspection, and complete streaming of an 8 MiB member.
 | Native dialogs | whiptail or dialog |
 | Long listing | eza (otherwise standard `ls`) |
 
@@ -426,6 +426,10 @@ shellcheck --shell=bash --severity=error \
 
 # Regression tests
 bash tests/regression.sh
+
+# Quick Archive real-format and security integration tests (requires CI fixture tools)
+bash tests/archive_real_formats.sh
+bash tests/archive_security.sh
 
 # Installer integration tests
 bash tests/install.sh
