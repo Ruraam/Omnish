@@ -508,6 +508,27 @@ printf 'archive payload\n' > "$archive_fixture/nested/file with spaces.txt"
 archive_file="$WORK/quick-archive-fixture.tar.gz"
 tar -czf "$archive_file" -C "$archive_fixture" .
 archive_is_supported "$archive_file" || fail "tar.gz was not detected as an archive"
+# libarchive-backed formats are enabled only when bsdtar can read the file.
+mkdir -p -- "$WORK/bsdtar-bin"
+cat > "$WORK/bsdtar-bin/bsdtar" <<'EOF_BSDTAR'
+#!/usr/bin/env bash
+case "$1" in
+    -tf) printf '%s\\n' 'folder/' 'folder/readme.txt' ;;
+    -xOf) [[ "$3" == folder/readme.txt ]] || exit 2; printf 'libarchive payload\\n' ;;
+    *) exit 2 ;;
+esac
+EOF_BSDTAR
+chmod +x "$WORK/bsdtar-bin/bsdtar"
+PATH="$WORK/bsdtar-bin:$PATH"
+libarchive_fixture="$WORK/sample.7z"
+printf 'mock 7z container' > "$libarchive_fixture"
+archive_is_supported "$libarchive_fixture" || fail "7z extension was not recognized"
+[[ "$(_archive_kind "$libarchive_fixture")" == libarchive ]] || fail "bsdtar-backed 7z format was not detected"
+[[ "$(_archive_list_to "$libarchive_fixture")" == *"folder/readme.txt"* ]] || fail "bsdtar listing omitted a member"
+[[ "$(_archive_stream_member "$libarchive_fixture" "folder/readme.txt")" == "libarchive payload" ]] || fail "bsdtar member streaming failed"
+for ext in rar iso cab ar; do
+    archive_is_supported "$WORK/sample.$ext" || fail "$ext extension was not recognized"
+done
 archive_is_supported "$WORK/future.lpk" || fail "future .lpk extension was not recognized"
 if archive_is_supported "$WORK/not-an-archive.txt"; then fail "plain text file was classified as an archive"; fi
 archive_index="$(_archive_list_to "$archive_file")"
