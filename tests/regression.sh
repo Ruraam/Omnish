@@ -81,7 +81,7 @@ grep -Fq -- '--color-extractor=median' "$CHAFA_ARGS_LOG" || fail "high quality d
 OMNISH_IMAGE_QUALITY=fast
 _preview_image "$WORK/fixture.png" 40 16 || fail "fast loop Chafa preview failed"
 grep -Fq -- '--work=2' "$CHAFA_ARGS_LOG" || fail "fast quality did not reduce Chafa work"
-grep -Fq -- '--colors=16' "$CHAFA_ARGS_LOG" || fail "fast quality did not reduce color count"
+grep -Fq -- '--colors=24bit' "$CHAFA_ARGS_LOG" || fail "loop fast quality did not preserve 24bit colour"
 OMNISH_IMAGE_QUALITY=high
 
 # fzf can use Kitty directly; a failed protocol falls back to safe symbols.

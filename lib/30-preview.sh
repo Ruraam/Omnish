@@ -127,7 +127,7 @@ _preview_image() {
     # loop_draw_preview clips output line by line. Keep it strictly textual,
     # but use a richer glyph set than vhalf for substantially more detail.
     if [[ "$backend" == loop ]]; then
-        if chafa --format=symbols --symbols="$symbols" --colors="$colors" \
+        if chafa --format=symbols --symbols="$symbols" --colors=24bit \
             --work="$work" --color-space="$color_space" \
             --color-extractor="$extractor" --size="${width}x${height}" \
             -- "$file" 2>/dev/null; then
