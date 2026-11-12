@@ -176,11 +176,37 @@ _archive_stream_member() {
         *) return 1 ;;
     esac
 }
+# Extract one selected member only for nested-archive detection. The temporary
+# copy is bounded in size and time; it is never unpacked as a directory.
+_archive_nested_member_to_file() {
+    local archive="$1" member="$2" output="$3" max_bytes="${OMNISH_NESTED_ARCHIVE_MAX_BYTES:-67108864}"
+    local timeout_seconds="${OMNISH_NESTED_ARCHIVE_TIMEOUT:-15}" lib_dir lib_file size
+    [[ "$max_bytes" =~ ^[1-9][0-9]*$ && "$timeout_seconds" =~ ^[1-9][0-9]*$ ]] || return 2
+    _archive_member_is_safe "$member" || return 1
+    command -v timeout >/dev/null 2>&1 || return 127
+    lib_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)" || return 1
+    lib_file="$lib_dir/${BASH_SOURCE[0]##*/}"
+    ( set +o pipefail
+      timeout --signal=TERM --kill-after=2 "${timeout_seconds}s" bash -c \
+        'source "$1" || exit 1; _archive_stream_member "$2" "$3"' \
+        _ "$lib_file" "$archive" "$member" | head -c "$((max_bytes + 1))" > "$output"
+    ) 2>/dev/null || :
+    size="$(stat -c '%s' -- "$output" 2>/dev/null || stat -f '%z' -- "$output" 2>/dev/null)" || return 1
+    [[ "$size" =~ ^[0-9]+$ ]] && (( size > 0 && size <= max_bytes )) || { rm -f -- "$output"; return 1; }
+    return 0
+}
+
 # Archive contents are never extracted. Only selected regular files are streamed.
 archive_browse() {
-    local archive="$1" index="$TMP_OMNISH_DIR/archive-index.$$"
-    local prefix='' selected rel child entry parent kind idx i member_path
+    local archive="$1" depth="${2:-0}" seen="${3:-}" index="$TMP_OMNISH_DIR/archive-index.$"
+    local prefix='' selected rel child entry parent kind idx i member_path nested_tmp nested_kind nested_hash nested_choice
     local -a members=() options=() paths=()
+    local max_depth="${OMNISH_NESTED_ARCHIVE_MAX_DEPTH:-4}"
+    [[ "$depth" =~ ^[0-9]+$ && "$max_depth" =~ ^[0-9]+$ ]] || return 2
+    if [[ -z "$seen" ]] && command -v sha256sum >/dev/null 2>&1; then
+        nested_hash="$(sha256sum -- "$archive" 2>/dev/null)"; nested_hash="${nested_hash%% *}"
+        [[ "$nested_hash" =~ ^[a-fA-F0-9]{64}$ ]] && seen="|$nested_hash|"
+    fi
     [[ -f "$archive" ]] || { status_msg "archive not found"; return 1; }
     kind=$(_archive_kind "$archive")
     [[ "$kind" != unknown ]] || { status_msg "unsupported archive"; return 1; }
@@ -222,14 +248,36 @@ archive_browse() {
             for entry in "${members[@]}"; do
                 [[ "${entry#./}" == "$rel" ]] && { member_path="$entry"; break; }
             done
+            nested_kind=unknown
+            if (( depth < max_depth )) && command -v sha256sum >/dev/null 2>&1; then
+                nested_tmp="$(mktemp "${TMP_OMNISH_DIR:-${TMPDIR:-/tmp}}/omnish-nested.XXXXXX")" || nested_tmp=''
+                if [[ -n "$nested_tmp" ]] && _archive_nested_member_to_file "$archive" "$member_path" "$nested_tmp"; then
+                    nested_kind="$(_archive_kind "$nested_tmp")"
+                fi
+                if [[ "$nested_kind" != unknown ]]; then
+                    nested_hash="$(sha256sum -- "$nested_tmp" 2>/dev/null)"; nested_hash="${nested_hash%% *}"
+                    if [[ "$nested_hash" =~ ^[a-fA-F0-9]{64}$ ]] && [[ "$seen" != *"|$nested_hash|"* ]]; then
+                        nested_choice="$(_omnish_select "Nested archive detected" < <(printf '%s\\n' "Open nested archive" "Preview as file" "Cancel"))" || nested_choice=Cancel
+                        if [[ "$nested_choice" == "Open nested archive" ]]; then
+                            archive_browse "$nested_tmp" "$((depth + 1))" "${seen}${nested_hash}|"
+                            rm -f -- "$nested_tmp"
+                            continue
+                        fi
+                    else
+                        status_msg "nested archive cycle detected"
+                    fi
+                fi
+                [[ -z "$nested_tmp" ]] || rm -f -- "$nested_tmp"
+            elif (( depth >= max_depth )); then
+                status_msg "nested archive depth limit reached"
+            fi
             if command -v less >/dev/null 2>&1; then
                 _archive_stream_member "$archive" "$member_path" 2>/dev/null | less -R
             else
                 _archive_stream_member "$archive" "$member_path" 2>/dev/null | head -n 200
-                printf '\n[preview limited to 200 lines]\n'
+                printf '\\n[preview limited to 200 lines]\\n'
                 read -rsn 1 -p "Press any key…" </dev/tty 2>/dev/null || :
-            fi
-        fi
+            fi        fi
     done
 }
 _archive_size() {
