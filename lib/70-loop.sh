@@ -723,7 +723,7 @@ loop_go_dir() {
 loop_flush_input() {
     [[ -n "${OMNISH_TTY_FD:-}" ]] || return 0
     local pending=""
-    while IFS= read -rsn 1 -t 0 -u "$OMNISH_TTY_FD" pending 2>/dev/null; do
+    while IFS= read -rsn 1 -t 0.01 -u "$OMNISH_TTY_FD" pending 2>/dev/null; do
         pending=""
     done
     return 0
