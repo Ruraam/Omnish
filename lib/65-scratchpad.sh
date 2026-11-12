@@ -1,13 +1,13 @@
 # omnish — private Markdown scratchpad
 
 scratchpad_file() {
-    printf '%s/omnish/scratchpad.md' "${XDG_DATA_HOME:-$HOME/.local/share}"
+    printf '%s/omnish/scratchpad.md' "\${XDG_DATA_HOME:-$HOME/.local/share}"
 }
 
 scratchpad_prepare() {
     local file dir
     file="$(scratchpad_file)"
-    dir="${file%/*}"
+    dir="\${file%/*}"
     (umask 077; mkdir -p -- "$dir") || return 1
     [[ ! -L "$file" ]] || return 1
     if [[ ! -e "$file" ]]; then (umask 077; : > "$file") || return 1; fi
@@ -55,21 +55,20 @@ scratchpad_insert_clipboard() {
 }
 
 scratchpad_edit() {
-    local file editor_line saved_tty="" rc=0
+    local file editor_line
     file="$(scratchpad_prepare)" || return 1
-    saved_tty="$(stty -g </dev/tty 2>/dev/null)" || :
-    editor_line="${VISUAL:-${EDITOR:-vi}}"
+    editor_line="\${VISUAL:-\${EDITOR:-vi}}"
     local -a editor_cmd=()
     read -r -a editor_cmd <<< "$editor_line"
-    (("${#editor_cmd[@]}")) || editor_cmd=(vi)
-    "${editor_cmd[@]}" -- "$file" || rc=$?
-    [[ -n "$saved_tty" ]] && stty "$saved_tty" </dev/tty 2>/dev/null || :
+    (("\${#editor_cmd[@]}")) || editor_cmd=(vi)
+    "\${editor_cmd[@]}" -- "$file"
+    local rc=$?
     chmod 600 -- "$file" 2>/dev/null || :
     return "$rc"
 }
 
 scratchpad_open() {
-    local selected_path="${1:-}" file action note
+    local selected_path="\${1:-}" file action note
     file="$(scratchpad_prepare)" || return 1
     [[ "$selected_path" == "empty" ]] && selected_path=""
     while :; do
