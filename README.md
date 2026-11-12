@@ -1,378 +1,507 @@
+<!--
+  Omnish README
+  The hero SVG below is the original project artwork and is intentionally kept
+  at assets/omnish-banner.svg. Please do not replace or inline-edit that asset.
+-->
+
 <p align="center">
-  <img src="assets/omnish-banner.svg" alt="omnish — modular file manager & system console" width="100%">
+  <img src="assets/omnish-banner.svg" alt="Omnish — modular file manager and system console" width="100%">
 </p>
 
-**A modular command-line environment for file management, system administration and maintenance.**
+<p align="center">
+  <strong>A powerful, modular terminal workspace — built with Bash.</strong>
+  <br>
+  Navigate files. Inspect your system. Manage everyday tasks.
+  <br>
+  <em>One interface. Two backends. No build step.</em>
+</p>
 
-`omnish` is a terminal file manager with a system administration panel
-built in. It runs on **any POSIX-ish Linux** with bash, coreutils, and
-findutils — no Python, no Node, no Rust, no compilation.
+<p align="center">
+  <a href="https://github.com/Ruraam/Omnish/actions/workflows/ci.yml"><img src="https://github.com/Ruraam/Omnish/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://github.com/Ruraam/Omnish/releases"><img src="https://img.shields.io/github/v/release/Ruraam/Omnish?display_name=tag&color=4ec9b0" alt="Latest release"></a>
+  <a href="https://github.com/Ruraam/Omnish/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-89ddff.svg" alt="GPL-3.0 license"></a>
+  <a href="https://www.gnu.org/software/bash/"><img src="https://img.shields.io/badge/bash-4.4%2B-4ec9b0.svg" alt="Bash 4.4+"></a>
+  <a href="https://github.com/Ruraam/Omnish"><img src="https://img.shields.io/github/stars/Ruraam/Omnish?style=flat&color=ffcb6b" alt="GitHub stars"></a>
+</p>
 
-It ships with two interchangeable backends:
-- **`fzf`** — faster to use, fuzzy search, mouse-friendly, richer previews.
-- **`loop`** — pure bash, zero forks per keypress, best on proot and Termux.
-
-Both backends share the same UI functions, marks system, trash, and
-system panel. You can switch at runtime with `OMNISH_BACKEND=loop omnish`.
-
----
-
-## Features
-
-**File manager**
-- Vim-style navigation (`j/k/g/G/h/l`), or arrows, or Tab.
-- Multi-select (`Tab`/`Shift-Tab`), marks persist across directories.
-- Copy, move, rename, symlink, mkdir, touch — all with inline prompts.
-- Preview pane: text (bat/highlight), images (chafa/viu), PDF (pdftotext),
-  markdown (glow/mdcat), archives, JSON, symlinks, and special files.
-- Live grep (`^G`, requires ripgrep).
-- `cd` on exit (`OMNI_CD_ON_EXIT=1`) — the parent shell follows you back.
-
-**Trash (reversible delete)**
-- `^D` moves files to `~/.local/share/omnish/trash/<ts>-<rand>/`.
-- `alt-u` restores the last batch (with accurate "restored/skipped/failed"
-  counts, no silent data loss).
-- `alt-t` browses the trash interactively.
-- `omnish --empty-trash` permanently clears it.
-
-**Disk usage panel (`^U`)**
-- `flat` mode: first-level sizes, batched, fast.
-- `tree` mode: recursive, sorted, percentage bars (dust-inspired).
-- Configurable depth, min %, exclude patterns, bar width.
-- Trash from inside the panel, drill down, rescan.
-
-**System panel (`^X`)**
-- CPU model, RAM, disk, network, kernel, uptime, logged-in users.
-- Services (systemd / openrc): list, start, stop, restart, enable, disable.
-- Packages (ulpm / apt / dnf / yum): list, search, install, remove, update.
-- Kernel modules (kmon-inspired): list, info, depends, load, unload,
-  blacklist, dmesg log.
-- BubbleOS generations: list + rollback.
-- CPU monitor (s-tui-inspired): live temperature/frequency/load, per-core
-  frequencies, and a stress test — all read directly from `/proc` and
-  `/sys`, no sensors, no msr, no root.
-- Spawn an interactive shell.
+<p align="center">
+  <a href="#-overview">Overview</a> ·
+  <a href="#-features">Features</a> ·
+  <a href="#-installation">Installation</a> ·
+  <a href="#-keyboard-controls">Controls</a> ·
+  <a href="#-configuration">Configuration</a> ·
+  <a href="#-architecture">Architecture</a>
+</p>
 
 ---
 
-## Installation
+## ✦ Overview
 
-### From source
+**Omnish** is a modular, keyboard-driven file manager and system console for Linux. It brings file operations, previews, reversible deletion, disk-usage exploration and system tools together in one terminal interface.
+
+It is written in **Bash** and designed to stay useful across different Linux environments — from a full desktop installation to lightweight systems, containers and Termux/proot setups.
+
+### The two-engine design
+
+Omnish ships with two interchangeable interaction backends. They share the same application modules and core operations, but make different trade-offs:
+
+| | **fzf backend** | **loop backend** |
+|:--|:--|:--|
+| Engine | [fzf](https://github.com/junegunn/fzf) | Bash input loop |
+| Fuzzy finder | Native fuzzy matching | Simple in-app filtering |
+| Mouse | Supported through fzf | Keyboard-focused |
+| External process per keypress | fzf handles interaction | No per-keypress subprocess |
+| Dependencies | Requires `fzf` | No fzf dependency |
+| Best fit | Feature-rich interactive terminals | Minimal environments, proot and Termux |
+
+Choose explicitly, or let Omnish decide automatically:
 
 ```bash
-git clone https://github.com/<your-username>/omnish.git
-cd omnish
+OMNISH_BACKEND=fzf  omnish
+OMNISH_BACKEND=loop omnish
+omnish                       # auto: fzf when available, otherwise loop
+```
 
-# Local install (recommended)
+---
+
+## ⚡ Features
+
+<table>
+  <tr>
+    <td width="50%">
+      <h3>▦ File management</h3>
+      <ul>
+        <li>Navigate with arrows or Vim-style keys</li>
+        <li>Multi-selection and persistent marks</li>
+        <li>Copy, move, rename and create files/directories</li>
+        <li>Create symlinks and toggle executable bits</li>
+        <li>Open files with the system MIME handler</li>
+        <li>Optional live recursive search with ripgrep</li>
+      </ul>
+    </td>
+    <td width="50%">
+      <h3>◫ Live previews</h3>
+      <ul>
+        <li>Text and source files</li>
+        <li>Images through chafa or viu</li>
+        <li>PDF text through poppler-utils</li>
+        <li>Markdown through glow or compatible tools</li>
+        <li>Archives, JSON, symlinks and special files</li>
+        <li>Optional preview pane and hidden-file toggle</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <h3>⌫ Reversible trash</h3>
+      <ul>
+        <li>Move deleted items into the Omnish trash</li>
+        <li>Restore the most recent deletion batch</li>
+        <li>Browse stored trash entries</li>
+        <li>Explicitly empty the trash when desired</li>
+      </ul>
+    </td>
+    <td>
+      <h3>◴ Disk usage explorer</h3>
+      <ul>
+        <li>Flat first-level size view</li>
+        <li>Recursive tree view with percentage bars</li>
+        <li>Adjustable depth and minimum percentage</li>
+        <li>Exclusion patterns and rescan support</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <h3>⌘ System console</h3>
+      <ul>
+        <li>CPU, memory, storage, network and kernel information</li>
+        <li>Service management for systemd and OpenRC</li>
+        <li>Package operations through supported package managers</li>
+        <li>Kernel module inspection and management</li>
+        <li>BubbleOS generation listing and rollback integration</li>
+      </ul>
+    </td>
+    <td>
+      <h3>▤ CPU monitor</h3>
+      <ul>
+        <li>Live load, temperature and frequency information</li>
+        <li>Per-core frequency view where exposed by the system</li>
+        <li>Optional CPU stress test</li>
+        <li>Reads Linux procfs/sysfs interfaces</li>
+      </ul>
+    </td>
+  </tr>
+</table>
+
+> **Optional tools enhance the experience.** The core application does not require fzf, image viewers, PDF tools or dialog utilities to start in loop mode.
+
+---
+
+## 🚀 Installation
+
+Omnish is intentionally **user-space only**.
+
+- No `sudo`.
+- No root installation.
+- No writes to `/usr`, `/opt` or other system directories.
+- The installer rejects root execution and any custom prefix that resolves outside your home directory.
+
+### 1. Get the source
+
+```bash
+git clone https://github.com/Ruraam/Omnish.git
+cd Omnish
+```
+
+### 2. Install for your user
+
+```bash
 ./install.sh
-
-# System-wide
-sudo PREFIX=/usr/local ./install.sh
 ```
 
-install.sh copies omnish and lib/ under $PREFIX/share/omnish/
-and symlinks $PREFIX/bin/omnish. It runs bash -n on every installed
-file and aborts if any fails.
+Default locations:
 
-Requirements
+| Component | Location |
+|:--|:--|
+| Launcher | `~/.local/bin/omnish` |
+| Application files | `~/.local/share/omnish/` |
+| Configuration | `~/.config/omnish/` |
+| User data | `~/.local/share/omnish/` |
+| Cache | `~/.cache/omnish/` |
 
-| Feature | Requires |
-| :--- | :--- |
-| **Core** | `bash` >= 4.4, `coreutils`, `findutils` |
-| **Backend `fzf`** | `fzf` (recommended >= 0.42) |
-| **Backend `loop`** | *nothing* (pure bash) |
-| **Image previews** | `chafa` (recommended) or `viu` |
-| **Text previews** | `bat` or `highlight` or `glow` |
-| **PDF previews** | `poppler-utils` |
-| **Grep search** | `ripgrep` (`rg`) |
-| **Long listing**  | `eza` (or `ls`) |
-| **Native dialogs** | `whiptail` or `dialog` (optional) |
-
-omnish --version reports the resolved backend and whether the optional
-script-dialog integration is active.
-
----
-
-Quick start
+If `~/.local/bin` is not already in your `PATH`, add this to your shell profile:
 
 ```bash
-omnish                  # open in $PWD
-omnish /etc             # open in /etc
-omnish --system-menu    # jump straight to the system panel
-omnish --dua            # jump straight to the disk usage panel
-omnish --undo           # restore the last trash batch
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
-The first time you launch it:
+Then reload your shell or run `source ~/.bashrc`.
 
-1. Tab selects the current file (a * appears next to it) and moves down.
-2. ^U opens the disk usage panel on the current directory.
-3. ^X opens the system panel (CPU, RAM, services, packages, modules).
-4. q or Esc quits; your last directory is saved for the shell wrapper
-   (see Shell integration).
+### Optional: choose another prefix inside HOME
 
----
-
-Keybindings
-
-Key Action
-↑/↓ / j/k Move selection
-Enter / → / l Open file or descend into directory
-← / h / ⌫ Go to parent directory
-g / G Top / bottom
-Tab / Shift-Tab Mark current + move down/up
-Space Toggle mark on current (loop backend)
-alt-a Toggle mark on current (both backends)
-alt-x Mark all in current directory
-^a Toggle-all in current directory
-c Clear marks
-^Y / ^V Copy / move marked files
-^D / ^E Trash (reversible, see below)
-^N / alt-n mkdir / touch
-^S / r Symlink / rename
-^O Open with mime handler
-p / x / X Paste marks / stat / toggle executable
-^P Toggle preview pane
-alt-h Toggle hidden files
-alt-l Toggle long listing
-^G Grep in tree (ripgrep)
-/ Local filter (loop backend)
-! / ~ / - Shell / $HOME / $OLDPWD
-1–9 Jump to OMNI_FAV_<N>
-F1 / ? Help
-Esc / ^Q / ^C Quit (loop: q or Esc)
-
-Inside the disk usage panel (^U)
-
-Key Action
-Enter / → Descend
-^H / ← Up one level
-^O Open (shell in dir / editor on file)
-^D / ^E Trash selected entry
-^R Rescan
-^T Toggle flat ↔ tree
-alt-d/alt-D Increase / decrease tree depth
-Esc Return to omnish
-
-Inside the system panel (^X)
-
-Entry Action
-all CPU + sensors + RAM + disk + net
-cpu Model + usage
-cpu-mon Live monitor (q quit, s stress test, r reset)
-stress CPU stress test (30 s × nproc)
-ram, disk, net, kernel, uptime, users as named
-sensors lm-sensors
-ping, exec Ping a host / run a script
-services systemd/openrc service management
-packages ulpm / apt / dnf / yum package management
-modules Kernel modules (list, info, depends, load, unload, blacklist, logs)
-gens, rollback BubbleOS generations (only on BubbleOS)
-shell Spawn an interactive shell
-
----
-
-Backends
-
-Both backends implement the same contract (fzf_main / loop_main) and
-consume the same UI, preview, dua, fileops, and trash modules.
-
-| Feature | `fzf` backend | `loop` backend |
-| :--- | :---: | :---: |
-| **Fuzzy search** | ✅ native fzf | ❌ substring only |
-| **Mouse support** | ✅ | ❌ |
-| **Forks per keypress** | ~1 (fzf redraw) | **0** (pure bash) |
-| **Alt-screen flicker** | Rare | Frequent on proot |
-| **Preview scrolling** | ✅ | Limited |
-| **Bundle size** | Needs fzf binary | **Self-contained** |
+A custom prefix is supported only when its resolved path remains inside your home directory:
 
 ```bash
-OMNISH_BACKEND=fzf  omnish   # explicit
-OMNISH_BACKEND=loop omnish   # explicit
-omnish                       # auto: fzf if present, else loop
+PREFIX="$HOME/.local/opt/omnish" ./install.sh
 ```
 
-On proot Debian, Termux, and CI containers, loop is
-noticeably faster because there's no fzf subprocess between every keypress.
+Use the same prefix when uninstalling:
+
+```bash
+PREFIX="$HOME/.local/opt/omnish" ./uninstall.sh
+```
+
+### Uninstall
+
+Interactive:
+
+```bash
+./uninstall.sh
+```
+
+Non-interactive or preview-only:
+
+```bash
+./uninstall.sh --dry-run
+./uninstall.sh --yes
+```
+
+The uninstaller removes the application and its launcher. It deliberately keeps your configuration, cache and user data so that uninstalling Omnish does not silently erase your personal files.
 
 ---
 
-Configuration
+## 🧰 Requirements
 
-Config file: $XDG_CONFIG_HOME/omnish/omnish.conf (~/.config/omnish/omnish.conf).
-Format: bash — it is sourced directly.
+| Component | Requirement |
+|:--|:--|
+| Core | Bash 4.4+, coreutils, findutils |
+| Recommended backend | fzf (recommended 0.42 or newer) |
+| Minimal backend | loop — built into Omnish |
+| Image previews | chafa or viu |
+| Text enhancements | bat or highlight |
+| Markdown preview | glow or compatible viewer |
+| PDF preview | poppler-utils |
+| Recursive search | ripgrep (`rg`) |
+| Native dialogs | whiptail or dialog |
+| Long listing | eza (otherwise standard `ls`) |
+
+Optional utilities are detected at runtime. Their absence should not prevent the core file manager from running.
+
+---
+
+## 🎮 Quick start
 
 ```bash
-# Behavioral
-OMNI_CD_ON_EXIT=1          # write $PWD to .omnish_d on exit
-OMNI_USE_TRASH=1           # 1: ^D goes to trash, 0: ^D uses rm -rf
-OMNI_OPENER="xdg-open"     # opener for ^O on non-text files
+omnish                  # open the current directory
+omnish /etc             # open a specific directory
+omnish --system-menu    # open the system console
+omnish --dua            # open disk usage for the current directory
+omnish --undo           # restore the latest trash batch
+omnish --version        # show version and resolved backend
+omnish --help           # show command-line help
+```
+
+### Keyboard controls
+
+| Key | Action |
+|:--|:--|
+| `↑` / `↓`, `j` / `k` | Move selection |
+| `Enter` / `→` / `l` | Open file or enter directory |
+| `←` / `h` / `Backspace` | Go to parent directory |
+| `g` / `G` | Jump to top / bottom |
+| `Tab` / `Shift+Tab` | Mark item and move down / up |
+| `Space` | Toggle mark (loop backend) |
+| `Alt+A` | Toggle mark |
+| `Alt+X` | Mark all in current directory |
+| `Ctrl+A` | Toggle all marks |
+| `c` | Clear marks |
+| `Ctrl+Y` / `Ctrl+V` | Copy / move marked items |
+| `Ctrl+D` / `Ctrl+E` | Move selected items to trash |
+| `Ctrl+N` / `Alt+N` | Create directory / file |
+| `Ctrl+S` / `r` | Create symlink / rename |
+| `Ctrl+O` | Open with MIME handler |
+| `p` / `x` / `X` | Paste marks / inspect / toggle executable |
+| `Ctrl+P` | Toggle preview pane |
+| `Alt+H` | Toggle hidden files |
+| `Alt+L` | Toggle long listing |
+| `Ctrl+G` | Search recursively (ripgrep) |
+| `F1` / `?` | Help |
+| `Esc` / `Ctrl+Q` | Quit |
+
+### Disk usage panel
+
+| Key | Action |
+|:--|:--|
+| `Enter` / `→` | Descend |
+| `Ctrl+H` / `←` | Go up one level |
+| `Ctrl+O` | Open directory or file |
+| `Ctrl+D` / `Ctrl+E` | Trash selected entry |
+| `Ctrl+R` | Rescan |
+| `Ctrl+T` | Switch flat / tree view |
+| `Alt+D` / `Alt+Shift+D` | Increase / decrease tree depth |
+| `Esc` | Return to Omnish |
+
+### System console
+
+Open it with `Ctrl+X` or launch directly using `omnish --system-menu`. Available entries depend on the host system and installed tools; management actions use the host's own service and package-manager commands.
+
+---
+
+## ⚙️ Configuration
+
+Configuration file:
+
+```text
+$XDG_CONFIG_HOME/omnish/omnish.conf
+```
+
+If `XDG_CONFIG_HOME` is not set, Omnish uses `~/.config/omnish/omnish.conf`.
+
+The file is Bash syntax and is sourced by Omnish. Only put trusted shell code in it.
+
+Example:
+
+```bash
+# Behaviour
+OMNI_CD_ON_EXIT=1
+OMNI_USE_TRASH=1
+OMNI_OPENER="xdg-open"
+
+# Trash location
 OMNI_TRASH="$HOME/.local/share/omnish/trash"
-OMNISH_BACKEND=auto        # fzf|loop|auto
-MARGIN_PREVIEW=60          # preview width: chars (60) or percent (60%)
+
+# Preview pane width
+MARGIN_PREVIEW=60
+
+# Backend
+OMNISH_BACKEND=auto
 
 # Disk usage panel
-DUA_MODE=flat              # flat|tree
+DUA_MODE=flat              # flat | tree
 DUA_TREE_DEPTH=3
 DUA_TREE_LINES=30
-DUA_MIN_PCT=1              # hide entries below this % of total
+DUA_MIN_PCT=1
 DUA_EXCLUDES=".git node_modules .cache .venv target"
 DUA_BAR_WIDTH=12
 
 # CPU monitor
-CPU_TEMP_THRESHOLD=80      # °C threshold for hook + colour
-CPU_HOOK_SCRIPT=""         # script run on crossing ($1=temp $2=threshold)
-CPU_MONITOR_REFRESH=1      # refresh interval (s)
+CPU_TEMP_THRESHOLD=80
+CPU_HOOK_SCRIPT=""
+CPU_MONITOR_REFRESH=1
 CPU_WIDGET_CACHE_TTL=2
 
 # Favorites
-OMNI_FAV_1=~/Documents
-OMNI_FAV_2=~/Downloads
-OMNI_FAV_3=~/Pictures
+OMNI_FAV_1="$HOME/Documents"
+OMNI_FAV_2="$HOME/Downloads"
+OMNI_FAV_3="$HOME/Pictures"
 ```
 
-Every option is optional. omnish --show-help opens the full reference.
+All settings are optional. Run `omnish --show-help` for the in-app reference.
 
----
+### Shell directory integration
 
-Shell integration
-
-Add to ~/.bashrc (or ~/.zshrc) so omnish can cd the parent shell
-on exit:
+If you want your parent interactive shell to change directory to the last location visited in Omnish, add a shell function to your Bash configuration:
 
 ```bash
 omnish() {
     command omnish "$@"
     local rc=$?
-    if [[ -f ~/.cache/omnish/.omnish_d ]]; then
-        cd "$(cat ~/.cache/omnish/.omnish_d)"
-        rm -f ~/.cache/omnish/.omnish_d
+    local state="${XDG_CACHE_HOME:-$HOME/.cache}/omnish/.omnish_d"
+
+    if [[ -f "$state" ]]; then
+        IFS= read -r target < "$state"
+        if [[ -n "$target" && -d "$target" ]]; then
+            cd -- "$target"
+        fi
+        rm -f -- "$state"
     fi
-    return $rc
+
+    return "$rc"
 }
 ```
 
-This pairs with OMNI_CD_ON_EXIT=1 (default).
+This works with `OMNI_CD_ON_EXIT=1`.
 
 ---
 
-Architecture
+## 🧩 Architecture
 
-```
+Omnish is split into small, ordered Bash modules. The entrypoint loads shared modules first, then activates exactly one interaction backend.
+
+```text
 omnish/
-├── omnish              # entrypoint: resolve backend, load modules, dispatch
+├── omnish                    # entrypoint and backend dispatcher
 ├── lib/
-│   ├── 00-config.sh    # paths, env, config loading, defaults
-│   ├── 10-utils.sh     # clean_path, human_size, cleanup, mark persistence
-│   ├── 15-dialog.sh    # optional script-dialog integration (falls back)
-│   ├── 20-ui.sh        # cmd_line, cmd_yes_no, status_msg (bash fallback)
-│   ├── 25-progress.sh  # progress bars + spinners (count, time, indeterminate)
-│   ├── 30-preview.sh   # _preview_file: text/images/pdf/markdown/etc.
-│   ├── 40-dua.sh       # disk usage panel (flat + tree views)
-│   ├── 45-system.sh    # system panel: cpu/ram/disk/net/svc/pkg/modules/gens
-│   ├── 46-cpu-monitor.sh # live CPU view + stress test + hook
-│   ├── 50-fileops.sh   # copy, move, delete, mkdir, touch, symlink
-│   ├── 60-trash.sh     # reversible delete (batch dirs, undo, empty, view)
-│   ├── 70-fzf.sh       # fzf backend (fzf_main)
-│   ├── 70-loop.sh      # loop backend (loop_main, pure bash)
-│   ├── 80-help.sh      # help text
-│   └── 99-main.sh      # backend dispatcher (main)
-├── install.sh
-├── uninstall.sh
-└── share/
-    └── omnish.conf.example
+│   ├── 00-config.sh          # paths, environment and configuration
+│   ├── 10-utils.sh           # common helpers and mark persistence
+│   ├── 15-dialog.sh          # optional dialog integration
+│   ├── 20-ui.sh              # prompts and UI fallbacks
+│   ├── 25-progress.sh        # progress bars and spinners
+│   ├── 30-preview.sh         # file preview engine
+│   ├── 40-dua.sh             # disk usage explorer
+│   ├── 45-system.sh          # system console
+│   ├── 46-cpu-monitor.sh     # CPU monitor and stress test
+│   ├── 50-fileops.sh         # file operations
+│   ├── 60-trash.sh           # reversible deletion
+│   ├── 70-fzf.sh             # fzf interaction backend
+│   ├── 70-loop.sh            # pure-Bash interaction backend
+│   ├── 80-help.sh            # help and key reference
+│   └── 99-main.sh            # final dispatcher
+├── assets/
+│   └── omnish-banner.svg     # project banner
+├── share/
+│   └── omnish.conf.example   # example configuration
+├── install.sh                # transactional user-local installer
+├── uninstall.sh              # user-local uninstaller
+└── tests/                    # regression, installer and PTY tests
 ```
 
-Load order is alphabetical. The entrypoint skips 70-* during the
-common pass, then loads exactly one backend based on OMNISH_BACKEND.
+### Design principles
 
-Dependency direction is strictly upward: 00 has no deps, 10 depends
-on 00, 20 on 10, and so on. 70-* depends on 00–60. 99 only
-depends on 70-*.
-
-Guards: every cross-module function is gated with declare -F so a
-missing optional module degrades gracefully. 20-ui.sh will not override
-cmd_line/cmd_yes_no if 15-dialog.sh already provided them.
+- **One responsibility per module.** Keep features isolated and composable.
+- **Shared core, interchangeable UI.** Both backends use the same file operations, previews, trash and system modules.
+- **Graceful optional dependencies.** Missing optional tools should degrade functionality, not break startup.
+- **User-owned installation.** No privileged installation path and no system-wide writes.
+- **Defensive shell scripting.** Quote paths, pass arguments directly, validate inputs and clean up terminal state on exit.
 
 ---
 
-Packaging (.lpk for BubbleOS)
+## 🧪 Development and testing
 
-```
-app_id: omnish
-version: 3.0.0
-depends: bash, findutils, coreutils, file
-optional: fzf, bat, chafa, eza, glow, poppler-utils, ripgrep, less,
-          whiptail, dialog
-entrypoint: ~/.local/bin/omnish
-permissions: filesystem=home
-description: Modular file manager and system console for BubbleOS
-```
-
-The user-scoped installer handles the .lpk's pre-install step: it copies omnish,
-lib/, and (if present) vendor/ under $PREFIX/share/omnish/.
-
-If whiptail or dialog is absent at runtime, 15-dialog.sh skips the
-native-dialog path and 20-ui.sh provides the pure-bash fallbacks. Nothing
-breaks.
-
----
-
-Development
+Clone the repository and run checks locally:
 
 ```bash
-# Syntax check every file
+# Bash syntax
 bash -n omnish
-for f in lib/*.sh; do bash -n "$f" || echo "FAIL: $f"; done
+for file in lib/*.sh install.sh uninstall.sh tests/*.sh; do
+    bash -n "$file" || exit 1
+done
 
-# Quick smoke test without installing
-./omnish /tmp
-./omnish --version
-./omnish --system-menu
-./omnish --dua /tmp
+# Static analysis (install ShellCheck separately)
+shellcheck --shell=bash --severity=error \
+    install.sh uninstall.sh omnish lib/*.sh tests/*.sh
 
-# Install to a throwaway prefix
-PREFIX=/tmp/omnish-test ./install.sh
-PATH=/tmp/omnish-test/bin:$PATH omnish --version
+# Regression tests
+bash tests/regression.sh
+
+# Installer integration tests
+bash tests/install.sh
+
+# PTY integration tests (requires Python 3)
+python3 tests/pty_integration.py
 ```
 
-Design rules
-
-· Every module has a single responsibility (see Architecture).
-· Cross-module functions are guarded by declare -F.
-· Errors go to /dev/tty (stderr is redirected to debug.log).
-· The trap cleanup EXIT INT TERM lives in the interactive entry points
-  (fzf_main, loop_main), never at module scope.
-· No bash -c "... '$var' ..." — arguments are always passed directly,
-  never interpolated into a shell string.
-· No external dependency is mandatory for core operation.
-
-Tested on: Debian 12, Ubuntu 22.04, Termux (native), proot Debian on
-Android 14+, Alpine 3.19.
+GitHub Actions runs the syntax, ShellCheck, regression, installer and PTY checks on pushes and pull requests.
 
 ---
 
-Exit codes
+## 📦 BubbleOS packaging
+
+Omnish is designed to integrate with BubbleOS and its user-space application model.
+
+Example package metadata:
+
+```yaml
+app_id: omnish
+version: 3.0.0
+depends:
+  - bash
+  - findutils
+  - coreutils
+  - file
+optional:
+  - fzf
+  - bat
+  - chafa
+  - eza
+  - glow
+  - poppler-utils
+  - ripgrep
+  - whiptail
+  - dialog
+entrypoint: ~/.local/bin/omnish
+permissions:
+  filesystem: home
+description: Modular file manager and system console
+```
+
+Optional integrations are detected at runtime. The application remains user-scoped; package integration must not turn Omnish into a privileged system installation.
+
+---
+
+## 📜 Exit codes
 
 | Code | Meaning |
-| :---: | :--- |
-| `0` | Normal exit (`q`, `Esc`, `^Q`) |
-| `130` | `SIGINT` (Ctrl-C)|
-| `143` | `SIGTERM` |
-| `1` | Fatal error (missing lib, bad backend) |
-| `2` | Invalid CLI argument |
+|:--:|:--|
+| `0` | Successful execution or normal quit |
+| `1` | Fatal error |
+| `2` | Invalid command-line argument |
+| `130` | Interrupted (`SIGINT`) |
+| `143` | Terminated (`SIGTERM`) |
 
 ---
 
-License
+## 🖤 Credits
 
-GPLv3 — see LICENSE.
+Omnish is an independent project. Some ideas and interaction patterns are inspired by:
 
-Portions inspired by:
+- [fff](https://github.com/dylanaraps/fff) — terminal file-manager workflow
+- [fzf](https://github.com/junegunn/fzf) — fuzzy finding
+- [dust](https://github.com/bootandy/dust) — disk-usage visualization
+- [kmon](https://github.com/orhun/kmon) — kernel module management UX
+- [s-tui](https://github.com/amanusk/s-tui) — CPU monitoring concepts
 
-· fff — the bash-loop TUI model.
-· dust — tree/percentage disk view.
-· kmon — kernel module management UX.
-· s-tui — CPU monitoring + stress test.
-· script-dialog — optional
-  whiptail/dialog abstraction.
+These projects are inspirations, not bundled dependencies unless explicitly stated.
+
+---
+
+## 📄 License
+
+Omnish is distributed under the **GNU General Public License v3.0**. See [LICENSE](LICENSE).
+
+<p align="center">
+  <strong>Omnish</strong> · A sharper terminal workspace.
+  <br>
+  <sub>Built for Linux. Made to stay lightweight. At home in BubbleOS.</sub>
+</p>
