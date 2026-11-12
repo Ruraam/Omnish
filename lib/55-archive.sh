@@ -8,13 +8,13 @@ archive_is_supported() {
     esac
 }
 _archive_magic_hex() {
-    od -An -tx1 -N "\${3:-8}" -j "\${2:-0}" -- "$1" 2>/dev/null | tr -d ' \n'
+    od -An -tx1 -N "${3:-8}" -j "${2:-0}" -- "$1" 2>/dev/null | tr -d ' \n'
 }
 _archive_libarchive_valid() {
     command -v bsdtar >/dev/null 2>&1 && bsdtar -tf "$1" >/dev/null 2>&1
 }
 _archive_kind() {
-    local archive="$1" name="\${1##*/}" magic
+    local archive="$1" name="${1##*/}" magic
     [[ -f "$archive" && -r "$archive" ]] || { printf unknown; return; }
     magic="$(_archive_magic_hex "$archive" 0 8)"
     if [[ "$magic" == 68737173 ]]; then
