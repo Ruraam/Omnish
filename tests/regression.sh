@@ -16,6 +16,7 @@ mkdir -p -- "$HOME" "$WORK/external-runtime"
 export OMNISH_RUNTIME_DIR="$WORK/external-runtime"
 source "$ROOT/lib/00-config.sh"
 source "$ROOT/lib/10-utils.sh"
+source "$ROOT/lib/30-preview.sh"
 source "$ROOT/lib/65-scratchpad.sh"
 
 status_msg() { :; }
@@ -28,6 +29,68 @@ fail() {
     printf 'FAIL: %s\n' "$1" >&2
     exit 1
 }
+
+
+# Chafa image protocol selection is passive and backend-safe.
+mkdir -p -- "$WORK/image-bin"
+cat > "$WORK/image-bin/chafa" <<'EOF_CHAFA'
+#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$CHAFA_ARGS_LOG"
+if [[ "${CHAFA_FAIL_FORMAT:-}" == *"$2"* && "$1" == --format=* ]]; then
+    exit 1
+fi
+exit 0
+EOF_CHAFA
+chmod +x "$WORK/image-bin/chafa"
+export CHAFA_ARGS_LOG="$WORK/chafa-args.log"
+: > "$CHAFA_ARGS_LOG"
+PATH="$WORK/image-bin:$PATH"
+
+unset OMNISH_IMAGE_FORMAT KITTY_PID
+TERM=xterm-kitty
+[[ "$(_preview_detect_image_format)" == kitty ]] || fail "Kitty was not detected from TERM"
+KITTY_PID=123
+TERM=xterm-kitty
+[[ "$(_preview_detect_image_format)" == kitty ]] || fail "Kitty was not detected from KITTY_PID"
+unset KITTY_PID
+TERM=xterm-256color
+TERM_PROGRAM=iTerm.app
+[[ "$(_preview_detect_image_format)" == iterm ]] || fail "iTerm2 was not detected passively"
+TERM_PROGRAM=WezTerm
+[[ "$(_preview_detect_image_format)" == sixel ]] || fail "WezTerm Sixel capability was not detected passively"
+unset TERM_PROGRAM
+TERM=foot
+[[ "$(_preview_detect_image_format)" == sixel ]] || fail "foot Sixel capability was not detected passively"
+TERM=xterm-256color
+[[ "$(_preview_detect_image_format)" == symbols ]] || fail "unknown terminal did not use safe symbols fallback"
+
+# loop must always use symbols/vhalf/24bit, even if Kitty is advertised.
+: > "$CHAFA_ARGS_LOG"
+KITTY_PID=123
+OMNISH_PREVIEW_BACKEND=loop
+_preview_image "$WORK/fixture.png" 40 16 || fail "loop Chafa preview failed"
+grep -Fq -- '--format=symbols' "$CHAFA_ARGS_LOG" || fail "loop did not force symbols"
+grep -Fq -- '--symbols=vhalf' "$CHAFA_ARGS_LOG" || fail "loop did not use vhalf symbols"
+grep -Fq -- '--colors=24bit' "$CHAFA_ARGS_LOG" || fail "loop did not force 24bit colour"
+! grep -Eq -- '--format=(kitty|sixel|iterm)' "$CHAFA_ARGS_LOG" || fail "loop emitted a graphical protocol"
+
+# fzf can use Kitty directly; a failed protocol falls back to safe symbols.
+: > "$CHAFA_ARGS_LOG"
+OMNISH_PREVIEW_BACKEND=fzf
+_preview_image "$WORK/fixture.png" 48 18 || fail "fzf Chafa preview failed"
+grep -Fq -- '--format=kitty' "$CHAFA_ARGS_LOG" || fail "fzf did not select Kitty graphics"
+: > "$CHAFA_ARGS_LOG"
+cat > "$WORK/image-bin/chafa" <<'EOF_CHAFA_FAIL'
+#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$CHAFA_ARGS_LOG"
+[[ "$1" == --format=kitty ]] && exit 1
+exit 0
+EOF_CHAFA_FAIL
+chmod +x "$WORK/image-bin/chafa"
+_preview_image "$WORK/fixture.png" 48 18 || fail "fzf did not fall back after a protocol render failure"
+grep -Fq -- '--format=symbols' "$CHAFA_ARGS_LOG" || fail "fzf protocol failure did not fall back to symbols"
+unset KITTY_PID OMNISH_PREVIEW_BACKEND
+TERM=xterm-256color
 
 # Caller-owned runtime directories must survive cleanup.
 cleanup

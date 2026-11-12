@@ -191,7 +191,7 @@ loop_draw_preview() {
     else
         local entry="${loop_list[loop_scroll]:-}"
         [[ -z "$entry" || "$entry" == "empty" ]] && return
-        _preview_file "$entry" > "$tmpf" 2>/dev/null
+        OMNISH_PREVIEW_BACKEND=loop _preview_file "$entry" > "$tmpf" 2>/dev/null
     fi
 
     local row=0 line
