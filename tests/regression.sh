@@ -515,6 +515,44 @@ archive_index="$(_archive_list_to "$archive_file")"
 [[ "$(_archive_stream_member "$archive_file" "./nested/file with spaces.txt")" == "archive payload" ]] || fail "archive member streaming failed for ./ paths"
 cp -- "$archive_file" "$WORK/future.lpk"
 [[ "$(_archive_kind "$WORK/future.lpk")" == tar ]] || fail "tar-backed .lpk detection failed"
+# ULPM-native LPK is a zstd SquashFS payload with an optional ULPM_SIG footer.
+mkdir -p -- "$WORK/lpk-bin"
+cat > "$WORK/lpk-bin/unsquashfs" <<'EOF_UNSQUASHFS'
+#!/usr/bin/env bash
+mode="$1"; shift
+image="$1"; shift
+[[ "$(head -c 4 -- "$image")" == hsqs ]] || exit 21
+case "$mode" in
+    -s)
+        [[ "$(tail -c 8 -- "$image")" != ULPM_SIG ]]
+        ;;
+    -lln)
+        [[ "$(tail -c 8 -- "$image")" != ULPM_SIG ]] || exit 22
+        printf '%s\n' \
+            'drwxr-xr-x 0/0 0 1970-01-01 00:00 ./' \
+            'drwxr-xr-x 0/0 0 1970-01-01 00:00 ./meta' \
+            '-rw-r--r-- 0/0 42 1970-01-01 00:00 ./meta/manifest.json'
+        ;;
+    -cat)
+        [[ "$(tail -c 8 -- "$image")" != ULPM_SIG ]] || exit 23
+        [[ "$1" == meta/manifest.json ]] || exit 24
+        printf '{"format_version":5,"id":"io.example.fixture","name":"fixture"}\n'
+        ;;
+    *) exit 25 ;;
+esac
+EOF_UNSQUASHFS
+chmod +x "$WORK/lpk-bin/unsquashfs"
+PATH="$WORK/lpk-bin:$PATH"
+ulpm_lpk="$WORK/ulpm-native.lpk"
+printf 'hsqsFAKE-SQUASHFS-PAYLOAD' > "$ulpm_lpk"
+printf 'ULPM_SIG' >> "$ulpm_lpk"
+dd if=/dev/zero bs=96 count=1 status=none >> "$ulpm_lpk"
+cp -- "$ulpm_lpk" "$WORK/ulpm-native.before"
+[[ "$(_archive_kind "$ulpm_lpk")" == lpk ]] || fail "native ULPM SquashFS LPK was not detected"
+ulpm_index="$(_archive_list_to "$ulpm_lpk")"
+[[ "$ulpm_index" == *"meta/manifest.json"* ]] || fail "ULPM LPK listing omitted manifest"
+[[ "$(_archive_stream_member "$ulpm_lpk" "meta/manifest.json")" == *'"format_version":5'* ]] || fail "ULPM LPK manifest streaming failed"
+cmp -s -- "$ulpm_lpk" "$WORK/ulpm-native.before" || fail "read-only LPK browsing modified the package"
 _omnish_select() { printf '%s\n' 'tar.gz — compatible'; }
 cmd_line() { cmd_reply="$WORK/created-quick-archive"; }
 marked_files=("$archive_fixture/nested/file with spaces.txt")
