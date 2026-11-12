@@ -309,6 +309,7 @@ loop_handle_key() {
                         '[C'|'OC') k='RIGHT' ;;
                         '[D'|'OD') k='LEFT' ;;
                         '[Z')      k='SHIFT_TAB' ;;
+                        'OQ'|'[12~') k='F2' ;;
                         *)         k='ESC' ;;
                     esac
                 else
@@ -346,6 +347,14 @@ loop_handle_key() {
                  (( loop_scroll > 0 )) && loop_scroll=$(( loop_scroll - 1 ))
                  loop_show_help=0
                  loop_draw
+                 ;;
+
+        # === Scratchpad ===
+        F2)      loop_reset_terminal
+                 scratchpad_open "$(loop_current_path)"
+                 loop_setup_terminal
+                 loop_show_help=0
+                 loop_draw full
                  ;;
 
         # === Inline help ===

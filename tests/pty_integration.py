@@ -238,13 +238,57 @@ printf 'FLUSH-CLEAN\\n'
             pass
 
 
+
+def scratchpad_editor_tty_test(tmp):
+    runtime = os.path.join(tmp, "scratchpad-runtime")
+    data_home = os.path.join(tmp, "scratchpad-data")
+    editor = os.path.join(tmp, "fake-editor")
+    with open(editor, "w", encoding="utf-8") as stream:
+        stream.write("#!/usr/bin/env bash\nstty -echo -icanon min 1 time 0 </dev/tty\nprintf 'editor ran\\n' >> \"$2\"\n")
+    os.chmod(editor, 0o700)
+
+    pid, master = pty.fork()
+    if pid == 0:
+        env = os.environ.copy()
+        env.update({"OMNISH_TEST_ROOT": ROOT,
+                    "OMNISH_RUNTIME_DIR": runtime,
+                    "XDG_DATA_HOME": data_home,
+                    "VISUAL": editor})
+        script = r'''
+set -euo pipefail
+source "$OMNISH_TEST_ROOT/lib/00-config.sh"
+source "$OMNISH_TEST_ROOT/lib/65-scratchpad.sh"
+before=$(stty -g </dev/tty)
+scratchpad_edit
+after=$(stty -g </dev/tty)
+[[ "$before" == "$after" ]] || { printf 'EDITOR-TERMIOS-MISMATCH\n'; exit 21; }
+grep -q 'editor ran' "$XDG_DATA_HOME/omnish/scratchpad.md"
+printf 'EDITOR-TTY-CLEAN\n'
+'''
+        os.execvpe("bash", ["bash", "-c", script], env)
+    try:
+        output = read_until(master, b"EDITOR-TTY-CLEAN", 5)
+        status = wait_child(pid, 5)
+        if not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 0:
+            raise AssertionError(f"scratchpad editor TTY restoration failed: {output!r}, status={status}")
+        if b"EDITOR-TERMIOS-MISMATCH" in output:
+            raise AssertionError(f"scratchpad editor changed terminal state: {output!r}")
+    finally:
+        try:
+            os.close(master)
+        except OSError:
+            pass
+
+
 def main():
     with tempfile.TemporaryDirectory(prefix="omnish-pty-") as tmp:
         loop_resize_and_exit_test(tmp)
     with tempfile.TemporaryDirectory(prefix="omnish-pty-sigterm-") as tmp:
         loop_sigterm_mid_escape_test(tmp)
     input_flush_and_termios_test()
-    print("PASS: PTY SIGWINCH redraw, queued escape cleanup and termios restoration")
+    with tempfile.TemporaryDirectory(prefix="omnish-pty-scratchpad-") as tmp:
+        scratchpad_editor_tty_test(tmp)
+    print("PASS: PTY SIGWINCH redraw, queued escape cleanup, termios restoration and scratchpad editor TTY preservation")
 
 
 if __name__ == "__main__":

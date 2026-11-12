@@ -16,6 +16,7 @@ mkdir -p -- "$HOME" "$WORK/external-runtime"
 export OMNISH_RUNTIME_DIR="$WORK/external-runtime"
 source "$ROOT/lib/00-config.sh"
 source "$ROOT/lib/10-utils.sh"
+source "$ROOT/lib/65-scratchpad.sh"
 
 status_msg() { :; }
 spinner_begin() { :; }
@@ -325,4 +326,48 @@ loop_process_resize
 [[ "$resize_draws" -eq 1 && "$resize_size_reads" -eq 1 ]] || fail "loop did not process a deferred SIGWINCH"
 [[ "$loop_resize_pending" -eq 0 ]] || fail "loop did not clear the pending resize flag"
 
-printf 'PASS: runtime ownership, file-operation guards and trash restore regressions\n'
+
+# Scratchpad persistence, permissions, path insertion and clipboard import.
+scratch_file="$(scratchpad_prepare)"
+[[ "$scratch_file" == "$XDG_DATA_HOME/omnish/scratchpad.md" ]] || fail "scratchpad ignored XDG_DATA_HOME"
+[[ "$(stat -c '%a' "$scratch_file")" == 600 ]] || fail "scratchpad was not created mode 600"
+scratchpad_append '### Note' 'sha256: deadbeef'
+scratchpad_append '- [ ] TODO' 'review the pending patch'
+[[ "$(stat -c '%a' "$scratch_file")" == 600 ]] || fail "scratchpad permissions changed after append"
+grep -Fq 'sha256: deadbeef' "$scratch_file" || fail "scratchpad note was not persisted"
+grep -Fq -- '- [ ] TODO' "$scratch_file" || fail "scratchpad TODO was not persisted"
+(
+    cd -- "$WORK"
+    scratchpad_insert_path 'path with spaces.txt'
+)
+grep -Fq "\`$WORK/path with spaces.txt\`" "$scratch_file" || fail "scratchpad did not insert selected path safely"
+wl-paste() { printf 'clipboard payload'; }
+scratchpad_insert_clipboard || fail "scratchpad clipboard import failed with wl-paste"
+grep -Fq 'clipboard payload' "$scratch_file" || fail "scratchpad clipboard payload was not appended"
+
+wl-paste() { return 1; }
+xclip() { printf 'xclip fallback payload'; }
+xsel() { printf 'xsel must not win'; }
+termux-clipboard-get() { printf 'Termux must not win'; }
+scratchpad_insert_clipboard || fail "scratchpad did not fall back from wl-paste to xclip"
+grep -Fq 'xclip fallback payload' "$scratch_file" || fail "xclip fallback payload missing"
+xclip() { return 1; }
+xsel() { printf 'xsel fallback payload'; }
+scratchpad_insert_clipboard || fail "scratchpad did not fall back to xsel"
+grep -Fq 'xsel fallback payload' "$scratch_file" || fail "xsel fallback payload missing"
+xsel() { return 1; }
+termux-clipboard-get() { printf 'Termux fallback payload'; }
+scratchpad_insert_clipboard || fail "scratchpad did not fall back to Termux clipboard"
+grep -Fq 'Termux fallback payload' "$scratch_file" || fail "Termux fallback payload missing"
+termux-clipboard-get() { return 1; }
+before_size="$(wc -c < "$scratch_file")"
+if scratchpad_insert_clipboard; then fail "missing clipboard provider was not a graceful no-op"; fi
+after_size="$(wc -c < "$scratch_file")"
+[[ "$before_size" == "$after_size" ]] || fail "empty clipboard changed scratchpad contents"
+
+rm -f -- "$scratch_file"
+ln -s -- "$WORK/target" "$scratch_file"
+if scratchpad_prepare >/dev/null 2>&1; then fail "scratchpad followed a symlink"; fi
+rm -f -- "$scratch_file"
+
+printf 'PASS: runtime ownership, file-operation guards, scratchpad and trash restore regressions\n'

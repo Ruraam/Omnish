@@ -20,32 +20,22 @@ while (( $# > 0 )); do
 done
 
 : "${HOME:?HOME must be set}"
-if (( EUID == 0 )); then
-    echo "error: refusing to uninstall as root; run as your normal user without sudo" >&2
-    exit 1
-fi
 HOME_CANON="$(cd -P -- "$HOME" && pwd -P)" || {
     echo "error: cannot resolve HOME" >&2
     exit 1
 }
-PREFIX="${PREFIX:-$HOME_CANON/.local}"
-if [[ "$PREFIX" != /* ]]; then
-    echo "error: PREFIX must be an absolute path inside HOME" >&2
-    exit 1
-fi
-resolved="$(realpath -m -- "$PREFIX" 2>/dev/null)" || {
-    echo "error: cannot resolve PREFIX='$PREFIX'" >&2
+LOCAL="$(realpath -m -- "$HOME_CANON/.local" 2>/dev/null)" || {
+    echo "error: cannot resolve user-local directory" >&2
     exit 1
 }
-case "$resolved" in
+case "$LOCAL" in
     "$HOME_CANON"/*) ;;
-    *) echo "error: PREFIX must stay inside HOME ($HOME_CANON); system-wide paths are not supported" >&2
+    *) echo "error: user-local directory resolves outside HOME; refusing uninstall" >&2
        exit 1 ;;
 esac
-PREFIX="$resolved"
 
-BIN="$PREFIX/bin/omnish"
-SHARE="$PREFIX/share/omnish"
+BIN="$LOCAL/bin/omnish"
+SHARE="$LOCAL/share/omnish"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/omnish"
 DATA="${XDG_DATA_HOME:-$HOME/.local/share}/omnish"
 CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/omnish"
@@ -68,11 +58,11 @@ elif (( exists_bin )); then
 fi
 
 if (( ! exists_bin && ! exists_share )); then
-    echo "omnish is not installed under PREFIX=$PREFIX"
+    echo "omnish is not installed in $LOCAL"
     exit 0
 fi
 
-echo "uninstall plan (PREFIX=$PREFIX):"
+echo "uninstall plan (user-local: $LOCAL):"
 (( exists_bin ))   && echo "  remove: $BIN"
 (( exists_share )) && echo "  remove: $SHARE (recursive)"
 echo "  keep:   $CACHE  (cache)"

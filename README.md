@@ -142,10 +142,10 @@ omnish                       # auto: fzf when available, otherwise loop
 
 Omnish is intentionally **user-space only**.
 
-- No `sudo`.
-- No root installation.
+- No `sudo` required.
 - No writes to `/usr`, `/opt` or other system directories.
-- The installer rejects root execution and any custom prefix that resolves outside your home directory.
+- The destination is fixed at `$HOME/.local`; `PREFIX` is ignored.
+- Works in regular Linux sessions and in Termux/proot. In proot, the files stay inside the container user's home.
 
 ### 1. Get the source
 
@@ -177,20 +177,6 @@ export PATH="$HOME/.local/bin:$PATH"
 ```
 
 Then reload your shell or run `source ~/.bashrc`.
-
-### Optional: choose another prefix inside HOME
-
-A custom prefix is supported only when its resolved path remains inside your home directory:
-
-```bash
-PREFIX="$HOME/.local/opt/omnish" ./install.sh
-```
-
-Use the same prefix when uninstalling:
-
-```bash
-PREFIX="$HOME/.local/opt/omnish" ./uninstall.sh
-```
 
 ### Uninstall
 
@@ -242,6 +228,10 @@ omnish --version        # show version and resolved backend
 omnish --help           # show command-line help
 ```
 
+### Scratchpad
+
+Press **F2** in either backend (fzf also supports **Ctrl+Space**) to open the private Markdown scratchpad. It is stored at `$XDG_DATA_HOME/omnish/scratchpad.md` (default `~/.local/share/omnish/scratchpad.md`) with mode `0600`. Add notes and TODOs, paste clipboard contents (`wl-paste` → `xclip` → `xsel` → `termux-clipboard-get`), insert the currently selected path, or open the file in `$VISUAL` / `$EDITOR`. If no clipboard provider is available, paste is a harmless no-op.
+
 ### Keyboard controls
 
 | Key | Action |
@@ -267,6 +257,8 @@ omnish --help           # show command-line help
 | `Alt+L` | Toggle long listing |
 | `Ctrl+G` | Search recursively (ripgrep) |
 | `F1` / `?` | Help |
+| `F2` | Open private Markdown scratchpad (both backends) |
+| `Ctrl+Space` | Open scratchpad (fzf backend) |
 | `Esc` / `Ctrl+Q` | Quit |
 
 ### Disk usage panel
