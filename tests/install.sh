@@ -16,11 +16,11 @@ cp -R -- "$ROOT/lib/." "$SRC/lib/"
 # System-wide/out-of-home prefixes must be rejected before creating anything.
 OUTSIDE_PREFIX="$WORK/outside-prefix"
 if HOME="$HOME_DIR" PREFIX="$OUTSIDE_PREFIX" "$SRC/install.sh" >"$WORK/outside.log" 2>&1; then
-    printf 'FAIL: installer accepted a PREFIX outside HOME\\n' >&2
+    printf 'FAIL: installer accepted a PREFIX outside HOME\n' >&2
     exit 1
 fi
-[[ ! -e "$OUTSIDE_PREFIX" ]] \\
-    || { printf 'FAIL: rejected PREFIX was created outside HOME\\n' >&2; exit 1; }
+[[ ! -e "$OUTSIDE_PREFIX" ]] \
+    || { printf 'FAIL: rejected PREFIX was created outside HOME\n' >&2; exit 1; }
 
 # Fresh install must support paths containing spaces inside HOME and create a working link.
 HOME="$HOME_DIR" PREFIX="$PREFIX" "$SRC/install.sh"
