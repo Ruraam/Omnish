@@ -60,7 +60,7 @@ _archive_lpk_list() {
         return 1
     fi
     if unsquashfs -lln "$view" > "$listing" 2>/dev/null; then
-        awk 'NF >= 6 { $1=$2=$3=$4=$5=""; sub(/^[[:space:]]+/, ""); if (substr($0,1,2) == "./") $0=substr($0,3); if ($0 != "") print }' "$listing"
+        awk 'NF >= 6 { $1=$2=$3=$4=$5=""; sub(/^[[:space:]]+/, ""); if (substr($0,1,2) == "./") $0=substr($0,3); sub(/^squashfs-root\/?/, ""); if ($0 != "") print }' "$listing"
         rc=$?
     else
         rc=1
