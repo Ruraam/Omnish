@@ -292,7 +292,7 @@ If `XDG_CONFIG_HOME` is not set, Omnish uses `~/.config/omnish/omnish.conf`.
 
 The file is Bash syntax and is sourced by Omnish. Only put trusted shell code in it.
 
-Chafa remains the only image renderer. In fzf mode, `auto` selects Kitty, iTerm2 or Sixel only from known environment hints (`KITTY_PID`, `TERM`, `TERM_PROGRAM`, `COLORTERM`); otherwise it uses symbols. No terminal capability query is sent. The loop backend always forces `--format=symbols --colors=full` (Chafa truecolor mode) and uses the glyph set selected by `OMNISH_IMAGE_QUALITY`; it falls back to `vhalf` if the installed Chafa cannot render the selected set. Its preview pane clips text line by line and must not receive graphical control streams. Set `OMNISH_IMAGE_FORMAT` to override auto-detection (`auto`, `kitty`, `sixel`, `iterm`, `symbols`).
+Chafa remains the only image renderer. The built-in image defaults are `OMNISH_IMAGE_QUALITY=high` and `OMNISH_IMAGE_FORMAT=auto`; no manual configuration is required. The default backend is `auto`: Omnish uses fzf when installed and falls back to loop otherwise. In fzf mode, `auto` selects Kitty, iTerm2 or Sixel only from known environment hints (`KITTY_PID`, `TERM`, `TERM_PROGRAM`, `COLORTERM`); otherwise it uses symbols. No terminal capability query is sent. The loop backend always forces `--format=symbols --colors=full` (Chafa truecolor mode) and uses the glyph set selected by `OMNISH_IMAGE_QUALITY`; it falls back to `vhalf` if the installed Chafa cannot render the selected set. Its preview pane clips text line by line and must not receive graphical control streams. Set `OMNISH_IMAGE_FORMAT` to override auto-detection (`auto`, `kitty`, `sixel`, `iterm`, `symbols`).
 
 Example:
 
@@ -305,15 +305,12 @@ OMNI_OPENER="xdg-open"
 # Trash location
 OMNI_TRASH="$HOME/.local/share/omnish/trash"
 
-# Preview pane width
-MARGIN_PREVIEW=60
+# Preview width follows the terminal layout automatically; set this only to override it.
+# OMNISH_PREVIEW_WIDTH=60%
 
-# Image previews (Chafa only)
+# Image previews (Chafa only; these are already the built-in defaults)
 OMNISH_IMAGE_FORMAT=auto   # auto | kitty | sixel | iterm | symbols
 OMNISH_IMAGE_QUALITY=high  # high | balanced | fast
-
-# Backend
-OMNISH_BACKEND=auto
 
 # Disk usage panel
 DUA_MODE=flat              # flat | tree

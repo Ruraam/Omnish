@@ -11,12 +11,13 @@
 # Trash location
 #OMNI_TRASH="${XDG_DATA_HOME:-$HOME/.local/share}/omnish/trash"
 
-# Preview margin (chars from right edge)
-#MARGIN_PREVIEW=60
+# Preview width is responsive by default (fzf and loop adapt to terminal size).
+# Set only if you want to override the adaptive width, e.g. 60 or 60%.
+#OMNISH_PREVIEW_WIDTH=60%
 
-# Image previews (Chafa only)
-#OMNISH_IMAGE_FORMAT=auto   # auto | kitty | sixel | iterm | symbols
-#OMNISH_IMAGE_QUALITY=high  # high | balanced | fast
+# Image previews (Chafa only) — these are also the built-in defaults.
+OMNISH_IMAGE_FORMAT=auto   # auto | kitty | sixel | iterm | symbols
+OMNISH_IMAGE_QUALITY=high  # high | balanced | fast
 
 # Terminal name (auto-detected if unset)
 #MY_TERMINAL="kitty"
