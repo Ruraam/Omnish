@@ -3,7 +3,7 @@
 
 archive_is_supported() {
     case "${1##*/}" in
-        *.tar|*.tar.*|*.tgz|*.tzst|*.txz|*.tbz2|*.zip|*.deb|*.apk|*.lpk) return 0 ;;
+        *.tar|*.tar.*|*.tgz|*.tzst|*.txz|*.tbz2|*.zip|*.deb|*.apk|*.lpk|*.rar|*.7z|*.iso|*.cab|*.ar) return 0 ;;
         *) return 1 ;;
     esac
 }
@@ -12,6 +12,13 @@ _archive_kind() {
         *.deb) printf deb ;;
         *.zip|*.apk) printf zip ;;
         *.tar|*.tar.*|*.tgz|*.tzst|*.txz|*.tbz2) printf tar ;;
+        *.rar|*.7z|*.iso|*.cab|*.ar)
+            if command -v bsdtar >/dev/null 2>&1 && bsdtar -tf "$1" >/dev/null 2>&1; then
+                printf libarchive
+            else
+                printf unknown
+            fi
+            ;;
         *.lpk)
             if [[ "$(head -c 4 -- "$1" 2>/dev/null)" == hsqs ]] && command -v unsquashfs >/dev/null 2>&1; then
                 printf lpk
@@ -93,6 +100,7 @@ _archive_list_to() {
         tar) tar -tf "$archive" ;;
         zip) command -v unzip >/dev/null 2>&1 || return 127; unzip -Z1 "$archive" ;;
         deb) command -v dpkg-deb >/dev/null 2>&1 || return 127; dpkg-deb --fsys-tarfile "$archive" | tar -tf - ;;
+        libarchive) bsdtar -tf "$archive" ;;
         lpk) _archive_lpk_list "$archive" ;;
         *) return 1 ;;
     esac
@@ -104,6 +112,7 @@ _archive_stream_member() {
         tar) tar -xOf "$archive" -- "$member" ;;
         zip) unzip -p "$archive" "$member" ;;
         deb) dpkg-deb --fsys-tarfile "$archive" | tar -xOf - -- "$member" ;;
+        libarchive) bsdtar -xOf "$archive" "$member" ;;
         lpk) _archive_lpk_stream_member "$archive" "$member" ;;
         *) return 1 ;;
     esac
