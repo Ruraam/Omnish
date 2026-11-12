@@ -126,18 +126,30 @@ quick_archive() {
     cmd_line "Save as [$output]: "; [[ -n "$cmd_reply" ]] && output="$cmd_reply"
     [[ "$output" == /* ]] || output="$PWD/$output"
     [[ "$output" == *".$ext" ]] || output="$output.$ext"
-    for source in "${sources[@]}"; do [[ "$output" == "$source" ]] && { status_msg "output cannot replace source"; return 1; }; done
+    for source in "${sources[@]}"; do
+        [[ "$output" == "$source" ]] && { status_msg "output cannot replace source"; return 1; }
+        [[ -d "$source" && ! -L "$source" && "$output" == "${source%/}/"* ]] && { status_msg "archive output cannot be inside a selected directory"; return 1; }
+        source_dir="${source%/*}"; [[ "$source_dir" == "$source" ]] && source_dir="$PWD"
+        [[ -n "$source_dir" ]] || source_dir=/
+        source_name="${source##*/}"
+        tar_args+=(-C "$source_dir" "./$source_name")
+    done
     if [[ -e "$output" ]]; then cmd_yes_no "Overwrite '${output##*/}'?"; [[ "$cmd_reply" == yes ]] || return 0; fi
     if [[ "$ext" == tar.gz ]]; then
-        tar -czf "$output" -- "${sources[@]}"
+        if tar -czf "$output" "${tar_args[@]}"; then rc=0; else rc=$?; fi
     elif [[ "$ext" == tar.zst ]]; then
         command -v zstd >/dev/null 2>&1 || { status_msg "install zstd"; return 1; }
-        tar --zstd -cf "$output" -- "${sources[@]}"
+        if tar --zstd -cf "$output" "${tar_args[@]}"; then rc=0; else rc=$?; fi
     else
         command -v zip >/dev/null 2>&1 || { status_msg "install zip"; return 1; }
-        zip -qr "$output" -- "${sources[@]}"
+        rc=0
+        for source in "${sources[@]}"; do
+            source_dir="${source%/*}"; [[ "$source_dir" == "$source" ]] && source_dir="$PWD"
+            [[ -n "$source_dir" ]] || source_dir=/
+            source_name="${source##*/}"
+            (cd -- "$source_dir" && zip -qr "$output" "./$source_name") || { rc=$?; break; }
+        done
     fi
-    rc=$?
     if ((rc == 0)); then
         status_msg "created ${output##*/}; estimated $(_human_size "$estimate") (approx.)"
         marked_files=(); sync_marked_files
