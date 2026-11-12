@@ -301,8 +301,8 @@ grep -Fq 'COLUMNS < 70 || LINES < 10' "$ROOT/lib/70-fzf.sh" || fail "fzf compact
 # fzf must use the same adaptive width policy as loop, while preserving
 # explicit user overrides and returning cancellation to its caller.
 source "$ROOT/lib/70-fzf.sh"
-[[ "$(fzf_preview_width 120 24)" == 72 ]] || fail "fzf landscape preview did not receive 60% width"
-[[ "$(fzf_preview_width 80 100)" == 40 ]] || fail "fzf portrait preview did not receive 50% width"
+[[ "$(fzf_preview_width 120 24 "")" == 72 ]] || fail "fzf landscape preview did not receive 60% width"
+[[ "$(fzf_preview_width 80 100 "")" == 40 ]] || fail "fzf portrait preview did not receive 50% width"
 [[ "$(fzf_preview_width 120 24 55)" == 55 ]] || fail "fzf ignored an explicit preview width"
 [[ "$(fzf_preview_width 120 24 90)" == 72 ]] || fail "fzf did not cap an explicit width to the adaptive maximum"
 
