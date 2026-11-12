@@ -102,12 +102,12 @@ grep -Fq -- '--format=symbols' "$CHAFA_ARGS_LOG" || fail "fzf protocol failure d
 # Failed image rendering must never fall through to raw SVG/XML or image bytes.
 cat > "$WORK/image-bin/chafa" <<'EOF_CHAFA_FAIL_ALL'
 #!/usr/bin/env bash
-printf '%s\\n' "$*" >> "$CHAFA_ARGS_LOG"
+printf '%s\n' "$*" >> "$CHAFA_ARGS_LOG"
 exit 2
 EOF_CHAFA_FAIL_ALL
 chmod +x "$WORK/image-bin/chafa"
-printf '<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>\\n' > "$WORK/fixture.svg"
-printf '\\211PNG\\r\\n\\032\\n' > "$WORK/fixture.png"
+printf '<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>\n' > "$WORK/fixture.svg"
+printf '\211PNG\r\n\032\n' > "$WORK/fixture.png"
 for image in "$WORK/fixture.svg" "$WORK/fixture.png"; do
     image_preview_output=$(_preview_file "$image")
     [[ "$image_preview_output" == *"image preview unavailable"* ]] || fail "failed image rendering did not show a clear diagnostic"
