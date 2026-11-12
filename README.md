@@ -76,7 +76,7 @@ omnish                       # auto: fzf when available, otherwise loop
         <li>Copy, move, rename and create files/directories</li>
         <li>Create symlinks and toggle executable bits</li>
         <li>Open files with the system MIME handler</li>
-        <li>Optional live recursive search with ripgrep</li>
+        <li>Optional live recursive search with ripgrep</li>\n        <li>Quick Archive: compress selections and browse archives as read-only folders</li>
       </ul>
     </td>
     <td width="50%">
@@ -208,7 +208,7 @@ The uninstaller removes the application and its launcher. It deliberately keeps 
 | Text enhancements | bat or highlight |
 | Markdown preview | glow or compatible viewer |
 | PDF preview | poppler-utils |
-| Recursive search | ripgrep (`rg`) |
+| Recursive search | ripgrep (`rg`) |\n| Archive support | tar; unzip for ZIP/APK; dpkg-deb for DEB; zip and zstd for optional creation formats |
 | Native dialogs | whiptail or dialog |
 | Long listing | eza (otherwise standard `ls`) |
 
@@ -251,7 +251,7 @@ Press **F2** in either backend (fzf also supports **Ctrl+Space**) to open the pr
 | `Ctrl+N` / `Alt+N` | Create directory / file |
 | `Ctrl+S` / `r` | Create symlink / rename |
 | `Ctrl+O` | Open with MIME handler |
-| `p` / `x` / `X` | Paste marks / inspect / toggle executable |
+| `p` / `x` / `X` | Paste marks / inspect / toggle executable |\n| `Z` | Quick Archive: compress marked files (`.tar.gz`, `.tar.zst`, `.zip`) with a size estimate |\n| `Enter` on archive | Browse `.tar.*`, `.zip`, `.deb`, `.apk` and tar/zip-backed `.lpk` without extracting |
 | `Ctrl+P` | Toggle preview pane |
 | `Alt+H` | Toggle hidden files |
 | `Alt+L` | Toggle long listing |
@@ -377,7 +377,7 @@ omnish/
 │   ├── 40-dua.sh             # disk usage explorer
 │   ├── 45-system.sh          # system console
 │   ├── 46-cpu-monitor.sh     # CPU monitor and stress test
-│   ├── 50-fileops.sh         # file operations
+│   ├── 50-fileops.sh         # file operations\n│   ├── 55-archive.sh         # Quick Archive compression + virtual browsing
 │   ├── 60-trash.sh           # reversible deletion
 │   ├── 70-fzf.sh             # fzf interaction backend
 │   ├── 70-loop.sh            # pure-Bash interaction backend
