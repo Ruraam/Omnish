@@ -41,7 +41,7 @@ _archive_stream_member() {
 # Archive contents are never extracted. Only selected regular files are streamed.
 archive_browse() {
     local archive="$1" index="$TMP_OMNISH_DIR/archive-index.$$"
-    local prefix='' selected rel child entry parent kind idx i
+    local prefix='' selected rel child entry parent kind idx i member_path
     local -a members=() options=() paths=()
     [[ -f "$archive" ]] || { status_msg "archive not found"; return 1; }
     kind=$(_archive_kind "$archive")
@@ -79,12 +79,18 @@ archive_browse() {
             if [[ "$parent" == */* ]]; then prefix="${parent%/*}/"; else prefix=''; fi
         elif [[ "$selected" == "[DIR] "* ]]; then
             prefix="$rel"
-        elif command -v less >/dev/null 2>&1; then
-            _archive_stream_member "$archive" "$rel" 2>/dev/null | less -R
         else
-            _archive_stream_member "$archive" "$rel" 2>/dev/null | head -n 200
-            printf '\n[preview limited to 200 lines]\n'
-            read -rsn 1 -p "Press any key…" </dev/tty 2>/dev/null || :
+            member_path="$rel"
+            for entry in "${members[@]}"; do
+                [[ "${entry#./}" == "$rel" ]] && { member_path="$entry"; break; }
+            done
+            if command -v less >/dev/null 2>&1; then
+                _archive_stream_member "$archive" "$member_path" 2>/dev/null | less -R
+            else
+                _archive_stream_member "$archive" "$member_path" 2>/dev/null | head -n 200
+                printf '\n[preview limited to 200 lines]\n'
+                read -rsn 1 -p "Press any key…" </dev/tty 2>/dev/null || :
+            fi
         fi
     done
 }
