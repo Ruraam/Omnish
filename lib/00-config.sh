@@ -50,7 +50,9 @@ touch "$MARKED_FILES_FILE" 2>/dev/null
 marked_files=()
 all_files=()
 
-# --- Defaults (overridable via config) ---
+# --- Defaults (overridable via environment/config) ---
+OMNISH_IMAGE_FORMAT="${OMNISH_IMAGE_FORMAT:-auto}"
+OMNISH_IMAGE_QUALITY="${OMNISH_IMAGE_QUALITY:-high}"
 OMNI_CD_ON_EXIT="${OMNI_CD_ON_EXIT:-1}"
 OMNI_USE_TRASH="${OMNI_USE_TRASH:-1}"
 OMNI_OPENER="${OMNI_OPENER:-}"
