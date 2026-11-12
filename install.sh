@@ -78,12 +78,20 @@ _cleanup() {
         fi
     fi
 
-    [[ -n "$link_tmp" && ( -e "$link_tmp" || -L "$link_tmp" ) ]] && rm -f -- "$link_tmp"
-    [[ -n "$stage" && -d "$stage" ]] && rm -rf -- "$stage"
+    if [[ -n "$link_tmp" && ( -e "$link_tmp" || -L "$link_tmp" ) ]]; then
+        rm -f -- "$link_tmp" || _log "warning: could not remove temporary launcher"
+    fi
+    if [[ -n "$stage" && -d "$stage" ]]; then
+        rm -rf -- "$stage" || _log "warning: could not remove staging directory"
+    fi
 
     if (( committed )); then
-        [[ -n "$backup_bin" && ( -e "$backup_bin" || -L "$backup_bin" ) ]] && rm -f -- "$backup_bin"
-        [[ -n "$backup_share" && -d "$backup_share" ]] && rm -rf -- "$backup_share"
+        if [[ -n "$backup_bin" && ( -e "$backup_bin" || -L "$backup_bin" ) ]]; then
+            rm -f -- "$backup_bin" || _log "warning: previous launcher backup remains at $backup_bin"
+        fi
+        if [[ -n "$backup_share" && -d "$backup_share" ]]; then
+            rm -rf -- "$backup_share" || _log "warning: previous installation backup remains at $backup_share"
+        fi
     fi
     exit "$rc"
 }
