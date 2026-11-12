@@ -6,14 +6,14 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/omnish-archive-nested.XXXXXX")"
 trap 'rm -rf -- "$WORK"' EXIT
 for tool in tar zip unzip timeout sha256sum; do
     command -v "$tool" >/dev/null 2>&1 || {
-        printf 'Missing nested archive test dependency: %s\\n' "$tool" >&2
+        printf 'Missing nested archive test dependency: %s\n' "$tool" >&2
         exit 2
     }
 done
 source "$ROOT/lib/55-archive.sh"
 TMP_OMNISH_DIR="$WORK"
 mkdir -p "$WORK/inner"
-printf 'nested payload\\n' > "$WORK/inner/payload.txt"
+printf 'nested payload\n' > "$WORK/inner/payload.txt"
 zip -q "$WORK/inner.zip" -j "$WORK/inner/payload.txt"
 tar -cf "$WORK/outer.tar" -C "$WORK" inner.zip
 nested="$WORK/extracted.zip"
