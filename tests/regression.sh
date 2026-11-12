@@ -513,8 +513,8 @@ mkdir -p -- "$WORK/bsdtar-bin"
 cat > "$WORK/bsdtar-bin/bsdtar" <<'EOF_BSDTAR'
 #!/usr/bin/env bash
 case "$1" in
-    -tf) printf '%s\\n' 'folder/' 'folder/readme.txt' ;;
-    -xOf) [[ "$3" == folder/readme.txt ]] || exit 2; printf 'libarchive payload\\n' ;;
+    -tf) printf '%s\n' 'folder/' 'folder/readme.txt' ;;
+    -xOf) [[ "$3" == folder/readme.txt ]] || exit 2; printf 'libarchive payload\n' ;;
     *) exit 2 ;;
 esac
 EOF_BSDTAR
