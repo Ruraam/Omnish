@@ -304,12 +304,12 @@ version: 3.0.0
 depends: bash, findutils, coreutils, file
 optional: fzf, bat, chafa, eza, glow, poppler-utils, ripgrep, less,
           whiptail, dialog
-entrypoint: /usr/bin/omnish
+entrypoint: ~/.local/bin/omnish
 permissions: filesystem=home
 description: Modular file manager and system console for BubbleOS
 ```
 
-install.sh handles the .lpk's pre-install step: it copies omnish,
+The user-scoped installer handles the .lpk's pre-install step: it copies omnish,
 lib/, and (if present) vendor/ under $PREFIX/share/omnish/.
 
 If whiptail or dialog is absent at runtime, 15-dialog.sh skips the
