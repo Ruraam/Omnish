@@ -210,7 +210,7 @@ The uninstaller removes the application and its launcher. It deliberately keeps 
 | Markdown preview | glow or compatible viewer |
 | PDF preview | poppler-utils |
 | Recursive search | ripgrep (`rg`) |
-| Archive support | tar; unzip for ZIP/APK; dpkg-deb for DEB; `unsquashfs` for ULPM SquashFS LPK; zip and zstd for optional creation formats |
+| Archive support | tar; unzip for ZIP/APK; dpkg-deb for DEB; `unsquashfs` for ULPM SquashFS LPK; optional `bsdtar` (libarchive) for RAR, 7z, ISO, CAB and AR when supported by the installed libarchive build; zip and zstd for optional creation formats |
 | Native dialogs | whiptail or dialog |
 | Long listing | eza (otherwise standard `ls`) |
 
@@ -255,7 +255,7 @@ Press **F2** in either backend (fzf also supports **Ctrl+Space**) to open the pr
 | `Ctrl+O` | Open with MIME handler |
 | `p` / `x` / `X` | Paste marks / inspect / toggle executable |
 | `Z` | Quick Archive: compress marked files (`.tar.gz`, `.tar.zst`, `.zip`) with a size estimate |
-| `Enter` on archive | Browse `.tar.*`, `.zip`, `.deb`, `.apk` and ULPM v5 SquashFS `.lpk` without extracting |
+| `Enter` on archive | Browse `.tar.*`, `.zip`, `.deb`, `.apk`, ULPM v5 SquashFS `.lpk`, and (with `bsdtar`) RAR, 7z, ISO, CAB and AR without extracting |
 | `Ctrl+P` | Toggle preview pane |
 | `Alt+H` | Toggle hidden files |
 | `Alt+L` | Toggle long listing |
