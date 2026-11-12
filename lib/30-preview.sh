@@ -217,7 +217,7 @@ _preview_file() {
                 if _preview_image "$file" "$width" "$img_h"; then
                     return 0
                 fi
-                printf '(image preview unavailable: Chafa could not decode or render this file)\\n'
+                printf '(image preview unavailable: Chafa could not decode or render this file)\n'
             else
                 printf '(image preview unavailable: install Chafa)\\n'
             fi
