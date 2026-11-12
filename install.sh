@@ -1,88 +1,185 @@
 #!/usr/bin/env bash
-# install.sh — install omnish to XDG paths
+# install.sh — transactional, unprivileged-by-default Omnish installer.
+#
+# Usage:
+#   ./install.sh
+#   PREFIX=/usr/local ./install.sh
+#
+# PREFIX defaults to $HOME/.local. No sudo is needed for a user install.
 
-set -euo pipefail
+set -Eeuo pipefail
 
-SELF="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
-ROOT="${SELF%/*}"
-[[ "$ROOT" == "$SELF" ]] && ROOT="."
-[[ -z "$ROOT" ]] && ROOT="."
+_log()  { printf 'omnish: %s\n' "$*"; }
+_die()  { printf 'omnish: error: %s\n' "$*" >&2; exit 1; }
 
-[[ -d "$ROOT/lib" ]] || { echo "error: $ROOT/lib not found" >&2; exit 1; }
-[[ -f "$ROOT/omnish" ]] || { echo "error: $ROOT/omnish not found" >&2; exit 1; }
+# Resolve the source tree without depending on GNU readlink -f.
+SELF="${BASH_SOURCE[0]}"
+case "$SELF" in
+    */*) ;;
+    *) SELF="$(command -v -- "$SELF" 2>/dev/null || printf '%s' "$SELF")" ;;
+esac
+while [[ -L "$SELF" ]]; do
+    _source_dir="$(cd -P -- "$(dirname -- "$SELF")" >/dev/null 2>&1 && pwd -P)" \
+        || _die "cannot resolve installer directory"
+    _source_link="$(readlink -- "$SELF")" || _die "cannot read installer symlink"
+    [[ "$_source_link" == /* ]] && SELF="$_source_link" || SELF="$_source_dir/$_source_link"
+done
+ROOT="$(cd -P -- "$(dirname -- "$SELF")" >/dev/null 2>&1 && pwd -P)" \
+    || _die "cannot resolve source directory"
 
+[[ -d "$ROOT/lib" ]] || _die "source directory is missing lib/: $ROOT"
+[[ -f "$ROOT/omnish" && -r "$ROOT/omnish" ]] || _die "source directory is missing readable omnish"
+
+: "${HOME:?HOME must be set}"
 PREFIX="${PREFIX:-$HOME/.local}"
+# Normalize trailing slashes before checking; then resolve symlinks before
+# creating bin/ or share/ so aliases of / cannot bypass the safety guard.
+while [[ "$PREFIX" == */ && "$PREFIX" != "/" ]]; do
+    PREFIX="${PREFIX%/}"
+done
+[[ -n "$PREFIX" && "$PREFIX" != "/" ]] || _die "refusing unsafe PREFIX='$PREFIX'"
+mkdir -p -- "$PREFIX" || _die "cannot create PREFIX: $PREFIX"
+PREFIX="$(cd -P -- "$PREFIX" && pwd -P)" || _die "cannot resolve PREFIX"
+[[ "$PREFIX" != "/" ]] || _die "refusing PREFIX resolving to /"
+mkdir -p -- "$PREFIX/bin" "$PREFIX/share" || _die "cannot create PREFIX directories: $PREFIX"
 BIN="$PREFIX/bin"
 SHARE="$PREFIX/share/omnish"
 
-if [[ -e "$BIN/omnish" && ! -L "$BIN/omnish" ]]; then
-    echo "warning: $BIN/omnish exists and is not a symlink (will be replaced)" >&2
+# Never replace a directory (including a symlink to a directory) with a file.
+if [[ -d "$BIN/omnish" ]]; then
+    _die "$BIN/omnish is a directory; move it aside before installing"
 fi
 
-mkdir -p "$BIN" "${PREFIX}/share"
+stage=""
+backup_share=""
+backup_bin=""
+link_tmp=""
+share_backed_up=0
+share_activated=0
+bin_backed_up=0
+bin_activated=0
+committed=0
 
-# Stage the installation first so a failed copy never destroys a working install.
-stage="$(mktemp -d "${PREFIX}/share/.omnish.install.XXXXXX")"
-cleanup_stage() { rm -rf -- "$stage"; }
-trap cleanup_stage EXIT INT TERM
+_cleanup() {
+    local rc=$?
+    trap - EXIT INT TERM HUP
 
-mkdir -p "$stage/lib"
-cp -r "$ROOT/lib/." "$stage/lib/"
-[[ -d "$ROOT/share"  ]] && { mkdir -p "$stage/share";  cp -r "$ROOT/share/."  "$stage/share/"; }
-[[ -d "$ROOT/vendor" ]] && { mkdir -p "$stage/vendor"; cp -r "$ROOT/vendor/." "$stage/vendor/"; }
-cp "$ROOT/omnish" "$stage/omnish"
-chmod +x "$stage/omnish"
+    if (( ! committed )); then
+        if (( bin_activated )); then
+            rm -f -- "$BIN/omnish" || _log "warning: could not remove failed launcher"
+        fi
+        if (( bin_backed_up )) && [[ -e "$backup_bin" || -L "$backup_bin" ]]; then
+            mv -- "$backup_bin" "$BIN/omnish" \
+                || _log "ROLLBACK FAILED: previous launcher remains at $backup_bin"
+        fi
 
-# Validate the staged tree before replacing the current installation.
-bash -n "$stage/omnish"
+        if (( share_activated )); then
+            rm -rf -- "$SHARE" || _log "warning: could not remove failed installation tree"
+        fi
+        if (( share_backed_up )) && [[ -e "$backup_share" || -L "$backup_share" ]]; then
+            mv -- "$backup_share" "$SHARE" \
+                || _log "ROLLBACK FAILED: previous installation remains at $backup_share"
+        fi
+    fi
+
+    if [[ -n "$link_tmp" && ( -e "$link_tmp" || -L "$link_tmp" ) ]]; then
+        rm -f -- "$link_tmp" || _log "warning: could not remove temporary launcher"
+    fi
+    if [[ -n "$stage" && -d "$stage" ]]; then
+        rm -rf -- "$stage" || _log "warning: could not remove staging directory"
+    fi
+
+    if (( committed )); then
+        if [[ -n "$backup_bin" && ( -e "$backup_bin" || -L "$backup_bin" ) ]]; then
+            rm -f -- "$backup_bin" || _log "warning: previous launcher backup remains at $backup_bin"
+        fi
+        if [[ -n "$backup_share" && -d "$backup_share" ]]; then
+            rm -rf -- "$backup_share" || _log "warning: previous installation backup remains at $backup_share"
+        fi
+    fi
+    exit "$rc"
+}
+trap _cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
+
+# Build on the destination filesystem so activation is a same-filesystem rename.
+stage="$(mktemp -d "$PREFIX/share/.omnish.stage.XXXXXX")" \
+    || _die "cannot create staging directory under $PREFIX/share"
+mkdir -p -- "$stage/lib"
+
+cp -R -- "$ROOT/lib/." "$stage/lib/" || _die "failed to stage lib/"
+if [[ -d "$ROOT/share" ]]; then
+    mkdir -p -- "$stage/share"
+    cp -R -- "$ROOT/share/." "$stage/share/" || _die "failed to stage share/"
+fi
+if [[ -d "$ROOT/vendor" ]]; then
+    mkdir -p -- "$stage/vendor"
+    cp -R -- "$ROOT/vendor/." "$stage/vendor/" || _die "failed to stage vendor/"
+fi
+cp -- "$ROOT/omnish" "$stage/omnish" || _die "failed to stage omnish"
+chmod 755 -- "$stage/omnish" || _die "cannot make staged omnish executable"
+
+# Validate before touching the current installation.
+bash -n "$stage/omnish" || _die "syntax check failed: omnish"
+module_count=0
 for mod in "$stage/lib"/*.sh; do
-    [[ -r "$mod" ]] && bash -n "$mod"
+    [[ -f "$mod" ]] || continue
+    bash -n "$mod" || _die "syntax check failed: ${mod##*/}"
+    ((module_count += 1))
 done
+(( module_count > 0 )) || _die "no shell modules found in lib/"
 
-# Replace the installed tree transactionally. Keep the previous version
-# available until the staged tree has been moved into place successfully.
-backup=""
+# Prepare a temporary launcher before swapping either live path.
+link_tmp="$(mktemp "$BIN/.omnish.link.XXXXXX")" || _die "cannot create temporary launcher"
+rm -f -- "$link_tmp"
+ln -s -- "$SHARE/omnish" "$link_tmp" || _die "cannot prepare launcher symlink"
+
+# Keep rollback copies until both the application tree and launcher are live.
 if [[ -e "$SHARE" || -L "$SHARE" ]]; then
-    backup="$(mktemp -d "${PREFIX}/share/.omnish.backup.XXXXXX")"
-    rmdir -- "$backup"
-    if ! mv -- "$SHARE" "$backup"; then
-        echo "error: cannot move current installation to backup" >&2
-        exit 1
-    fi
+    backup_share="$(mktemp -d "$PREFIX/share/.omnish.backup.XXXXXX")" \
+        || _die "cannot create installation backup path"
+    rmdir -- "$backup_share"
+    mv -- "$SHARE" "$backup_share" || _die "cannot back up current installation"
+    share_backed_up=1
 fi
 
-if ! mv -- "$stage" "$SHARE"; then
-    echo "error: cannot activate staged installation" >&2
-    if [[ -n "$backup" && -e "$backup" ]]; then
-        mv -- "$backup" "$SHARE" || echo "error: rollback failed; backup is at $backup" >&2
-    fi
-    exit 1
+mv -- "$stage" "$SHARE" || _die "cannot activate staged installation"
+stage=""
+share_activated=1
+
+if [[ -e "$BIN/omnish" || -L "$BIN/omnish" ]]; then
+    backup_bin="$(mktemp "$BIN/.omnish.previous.XXXXXX")" \
+        || _die "cannot create launcher backup path"
+    rm -f -- "$backup_bin"
+    mv -- "$BIN/omnish" "$backup_bin" || _die "cannot back up current launcher"
+    bin_backed_up=1
 fi
 
-# The new tree is active. Only now discard the previous installation.
-[[ -n "$backup" ]] && rm -rf -- "$backup"
-trap - EXIT INT TERM
-ln -sfn "$SHARE/omnish" "$BIN/omnish"
+mv -f -- "$link_tmp" "$BIN/omnish" || _die "cannot activate launcher symlink"
+link_tmp=""
+bin_activated=1
 
-# Sanity check
-_fail=0
-bash -n "$SHARE/omnish" 2>/dev/null || { echo "error: syntax in $SHARE/omnish" >&2; _fail=1; }
+# Verify the installed paths, not just the staging directory.
+[[ -x "$BIN/omnish" && -L "$BIN/omnish" ]] || _die "launcher verification failed"
+[[ "$(readlink -- "$BIN/omnish")" == "$SHARE/omnish" ]] || _die "launcher points to an unexpected target"
+bash -n "$SHARE/omnish" || _die "installed entrypoint failed syntax verification"
 for mod in "$SHARE/lib"/*.sh; do
-    [[ -r "$mod" ]] || continue
-    bash -n "$mod" 2>/dev/null || { echo "error: syntax in $mod" >&2; _fail=1; }
+    [[ -f "$mod" ]] || continue
+    bash -n "$mod" || _die "installed module failed syntax verification: ${mod##*/}"
 done
-(( _fail )) && { echo "install aborted" >&2; exit 1; }
 
-echo "installed:"
-echo "  $BIN/omnish -> $SHARE/omnish"
-echo "  modules:    $SHARE/lib/"
-echo "  config:     ${XDG_CONFIG_HOME:-$HOME/.config}/omnish/omnish.conf"
+committed=1
+_log "installation completed"
+printf '  executable: %s/omnish\n' "$BIN"
+printf '  application: %s/\n' "$SHARE"
+printf '  config:      %s/omnish/omnish.conf\n' "${XDG_CONFIG_HOME:-$HOME/.config}"
 
 case ":$PATH:" in
     *":$BIN:"*) ;;
-    *) echo ""; echo "note: $BIN is not in PATH."
-       echo "      add: export PATH=\"$BIN:\$PATH\"" ;;
+    *)
+        printf '\nnote: %s is not in PATH. Add this to your shell profile:\n' "$BIN"
+        printf '  export PATH="%s:$PATH"\n' "$BIN"
+        ;;
 esac
-
-echo ""
-echo "run 'omnish --version' to verify."
+printf "\nRun 'omnish --version' to verify.\n"
