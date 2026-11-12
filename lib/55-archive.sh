@@ -17,7 +17,7 @@ _archive_kind() {
     local archive="$1" name="${1##*/}" magic
     [[ -f "$archive" && -r "$archive" ]] || { printf unknown; return; }
     magic="$(_archive_magic_hex "$archive" 0 8)"
-    if [[ "$magic" == 68737173 ]]; then
+    if [[ "$magic" == 68737173* ]]; then
         if command -v unsquashfs >/dev/null 2>&1; then printf lpk
         else printf unknown; fi
         return
