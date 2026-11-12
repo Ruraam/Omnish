@@ -292,7 +292,7 @@ If `XDG_CONFIG_HOME` is not set, Omnish uses `~/.config/omnish/omnish.conf`.
 
 The file is Bash syntax and is sourced by Omnish. Only put trusted shell code in it.
 
-Chafa remains the only image renderer. In fzf mode, `auto` selects Kitty, iTerm2 or Sixel only from known environment hints (`KITTY_PID`, `TERM`, `TERM_PROGRAM`, `COLORTERM`); otherwise it uses symbols. No terminal capability query is sent. The loop backend always forces `--format=symbols --symbols=vhalf --colors=full` (Chafa truecolor mode), because its preview pane clips text line by line and must not receive graphical control streams. Set `OMNISH_IMAGE_FORMAT` to override auto-detection (`auto`, `kitty`, `sixel`, `iterm`, `symbols`).
+Chafa remains the only image renderer. In fzf mode, `auto` selects Kitty, iTerm2 or Sixel only from known environment hints (`KITTY_PID`, `TERM`, `TERM_PROGRAM`, `COLORTERM`); otherwise it uses symbols. No terminal capability query is sent. The loop backend always forces `--format=symbols --colors=full` (Chafa truecolor mode) and uses the glyph set selected by `OMNISH_IMAGE_QUALITY`; it falls back to `vhalf` if the installed Chafa cannot render the selected set. Its preview pane clips text line by line and must not receive graphical control streams. Set `OMNISH_IMAGE_FORMAT` to override auto-detection (`auto`, `kitty`, `sixel`, `iterm`, `symbols`).
 
 Example:
 
