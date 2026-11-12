@@ -4,7 +4,7 @@
 archive_is_supported() {
     case "${1##*/}" in
         *.tar|*.tar.*|*.tgz|*.tzst|*.txz|*.tbz2|*.zip|*.deb|*.apk|*.lpk|*.rar|*.7z|*.iso|*.cab|*.ar) return 0 ;;
-        *) return 1 ;;
+        *) [[ "$(_archive_kind "$1")" != unknown ]] ;;
     esac
 }
 _archive_magic_hex() {
@@ -18,7 +18,7 @@ _archive_kind() {
     [[ -f "$archive" && -r "$archive" ]] || { printf unknown; return; }
     magic="$(_archive_magic_hex "$archive" 0 8)"
     if [[ "$magic" == 68737173 ]]; then
-        if command -v unsquashfs >/dev/null 2>&1 && unsquashfs -s "$archive" >/dev/null 2>&1; then printf lpk
+        if command -v unsquashfs >/dev/null 2>&1; then printf lpk
         else printf unknown; fi
         return
     fi
@@ -28,7 +28,7 @@ _archive_kind() {
             else printf unknown; fi
             return ;;
         213c617263683e0a)
-            if [[ "$name" == *.deb ]] && command -v dpkg-deb >/dev/null 2>&1 && dpkg-deb --info "$archive" >/dev/null 2>&1; then printf deb
+            if command -v dpkg-deb >/dev/null 2>&1 && dpkg-deb --info "$archive" >/dev/null 2>&1; then printf deb
             elif _archive_libarchive_valid "$archive"; then printf libarchive
             else printf unknown; fi
             return ;;
