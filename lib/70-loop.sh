@@ -37,7 +37,9 @@ loop_reset_terminal() {
 }
 
 loop_clear_scroll() {
-    printf '\e[1;%sH\e[J\e[1;%sr' "$((LINES-1))" "$((LINES-1))"
+    local bottom=${LINES:-24}
+    (( bottom > 1 )) && (( bottom-=1 )) || bottom=1
+    printf '\e[1;%sH\e[J\e[1;%sr' "$bottom" "$bottom"
 }
 
 loop_hide_cursor() { printf '\e[?25l'; }
@@ -216,10 +218,29 @@ loop_draw() {
     get_term_size
     loop_clear_scroll
 
-    local split=$(( COLUMNS * 45 / 100 ))
-    local list_w=$(( split - 2 ))
-    local prev_w=$(( COLUMNS - split - 2 ))
-    local rows=$(( LINES - 2 ))
+    # Responsive layout: reserve the preview pane only when it can remain
+    # useful. Narrow/short terminals get the full width for the file list.
+    local split list_w prev_w rows
+    rows=$(( LINES - 2 ))
+    (( rows < 1 )) && rows=1
+
+    if (( COLUMNS >= 90 && LINES >= 10 )) && [[ ! -f "$CACHE_OMNISH_DIR/hidepreview" ]]; then
+        split=$(( COLUMNS * 45 / 100 ))
+        list_w=$(( split - 2 ))
+        prev_w=$(( COLUMNS - split - 2 ))
+        (( list_w < 1 )) && list_w=1
+        (( prev_w < 1 )) && prev_w=1
+        loop_preview_visible=1
+    else
+        split=0
+        list_w=$(( COLUMNS - 2 ))
+        (( list_w < 1 )) && list_w=1
+        prev_w=0
+        loop_preview_visible=0
+    fi
+    loop_list_width=$list_w
+    loop_preview_width=$prev_w
+    loop_rows=$rows
 
     local start=0
     if (( loop_total + 1 > rows )); then
@@ -239,11 +260,10 @@ loop_draw() {
         ((row+=1))
     done
 
-    for (( row=0; row<rows; row++ )); do
-        printf '\e[%s;%sH\e[2m│\e[m' "$((row+1))" "$split"
-    done
-
-    if [[ ! -f "$CACHE_OMNISH_DIR/hidepreview" ]]; then
+    if (( loop_preview_visible )); then
+        for (( row=0; row<rows; row++ )); do
+            printf '\e[%s;%sH\e[2m│\e[m' "$((row+1))" "$split"
+        done
         loop_draw_preview "$((split+2))" "$prev_w" "$rows"
     fi
 
