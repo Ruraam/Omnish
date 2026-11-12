@@ -39,6 +39,8 @@ jobs:
         run: bash tests/archive_real_formats.sh
       - name: Quick Archive security and stress integration
         run: bash tests/archive_security.sh
+      - name: Quick Archive magic detection integration
+        run: bash tests/archive_magic_detection.sh
       - name: Installer integration tests
         run: bash tests/install.sh
       - name: Checkout ULPM packaging engine
