@@ -338,7 +338,7 @@ loop_handle_key() {
         l|RIGHT|'')  loop_open_selected ;;
         h|LEFT|$'\177'|BACKSPACE) loop_go_parent ;;
         e|F5)    loop_draw full ;;
-        z)       loop_with_terminal "quick_archive" ;;
+        z|Z)     loop_with_terminal "quick_archive" ;;
 
         q|ESC)   loop_quit ;;
 
