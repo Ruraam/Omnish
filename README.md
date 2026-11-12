@@ -211,6 +211,8 @@ The uninstaller removes the application and its launcher. It deliberately keeps 
 | PDF preview | poppler-utils |
 | Recursive search | ripgrep (`rg`) |
 | Archive support | tar; unzip for ZIP/APK; dpkg-deb for DEB; `unsquashfs` for ULPM SquashFS LPK; optional `bsdtar` (libarchive) for RAR, 7z, ISO, CAB and AR when supported by the installed libarchive build; zip and zstd for optional creation formats |
+
+Quick Archive's CI includes real 7z, ISO-9660, CAB and ar fixtures. RAR is checked for fail-closed handling of malformed input; a genuine RAR fixture is not generated because the Ubuntu runner's free toolchain does not provide a RAR encoder. Actual RAR browsing remains dependent on the installed libarchive build and its RAR reader support.
 | Native dialogs | whiptail or dialog |
 | Long listing | eza (otherwise standard `ls`) |
 
