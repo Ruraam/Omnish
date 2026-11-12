@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-ROOT="$(cd -- "$(dirname -- "\${BASH_SOURCE[0]}")/.." && pwd -P)"
-WORK="$(mktemp -d "\${TMPDIR:-/tmp}/omnish-archive-magic.XXXXXX")"
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/omnish-archive-magic.XXXXXX")"
 trap 'rm -rf -- "$WORK"' EXIT
 for tool in tar zip unzip bsdtar genisoimage gcab ar; do
     command -v "$tool" >/dev/null 2>&1 || { echo "Missing dependency: $tool" >&2; exit 2; }
