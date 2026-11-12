@@ -30,7 +30,7 @@ NAVIGATION
   Enter/→          Open / descend         ←/h/⌫       Go up one level
   g / G            Top / bottom           F5 / ^R     Refresh listing
   F1 / ?           This help              Esc/^Q/^C   Quit (loop: q|Esc)
-  F2 / ^Space      Open Scratchpad (notes, TODO, clipboard, path)
+  F2                Open Scratchpad (fzf also supports Ctrl+Space)
   ^P               Toggle preview
   alt-h            Toggle hidden files    (loop: . also works)
   alt-l            Toggle long listing

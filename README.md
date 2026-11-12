@@ -244,7 +244,7 @@ omnish --help           # show command-line help
 
 ### Scratchpad
 
-Press **F2** (or **Ctrl+Space**) in the file manager to open the private Markdown scratchpad. It is stored at `$XDG_DATA_HOME/omnish/scratchpad.md` (default `~/.local/share/omnish/scratchpad.md`) with mode `0600`. Add notes and TODOs, paste clipboard contents (`wl-paste` → `xclip` → `xsel` → `termux-clipboard-get`), insert the currently selected path, or open the file in `$VISUAL` / `$EDITOR`. If no clipboard provider is available, paste is a harmless no-op.
+Press **F2** in either backend (fzf also supports **Ctrl+Space**) to open the private Markdown scratchpad. It is stored at `$XDG_DATA_HOME/omnish/scratchpad.md` (default `~/.local/share/omnish/scratchpad.md`) with mode `0600`. Add notes and TODOs, paste clipboard contents (`wl-paste` → `xclip` → `xsel` → `termux-clipboard-get`), insert the currently selected path, or open the file in `$VISUAL` / `$EDITOR`. If no clipboard provider is available, paste is a harmless no-op.
 
 ### Keyboard controls
 
@@ -271,7 +271,8 @@ Press **F2** (or **Ctrl+Space**) in the file manager to open the private Markdow
 | `Alt+L` | Toggle long listing |
 | `Ctrl+G` | Search recursively (ripgrep) |
 | `F1` / `?` | Help |
-| `F2` / `Ctrl+Space` | Open private Markdown scratchpad |
+| `F2` | Open private Markdown scratchpad (both backends) |
+| `Ctrl+Space` | Open scratchpad (fzf backend) |
 | `Esc` / `Ctrl+Q` | Quit |
 
 ### Disk usage panel
