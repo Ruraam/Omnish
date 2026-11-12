@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Focused regression tests for runtime ownership, file operations and trash.
 set -euo pipefail
-trap 'rc=$?; printf "FAIL: regression command at line %s (exit %s): %s\\n" "$LINENO" "$rc" "$BASH_COMMAND" >&2; exit "$rc"' ERR
+trap 'rc=$?; printf "FAIL: regression command at line %s (exit %s): %s\n" "$LINENO" "$rc" "$BASH_COMMAND" >&2; exit "$rc"' ERR
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 WORK="$(mktemp -d)"
@@ -35,7 +35,7 @@ fail() {
 mkdir -p -- "$WORK/image-bin"
 cat > "$WORK/image-bin/chafa" <<'EOF_CHAFA'
 #!/usr/bin/env bash
-printf '%s\\n' "$*" >> "$CHAFA_ARGS_LOG"
+printf '%s\n' "$*" >> "$CHAFA_ARGS_LOG"
 if [[ "${CHAFA_FAIL_FORMAT:-}" == *"$2"* && "$1" == --format=* ]]; then
     exit 1
 fi
@@ -82,7 +82,7 @@ grep -Fq -- '--format=kitty' "$CHAFA_ARGS_LOG" || fail "fzf did not select Kitty
 : > "$CHAFA_ARGS_LOG"
 cat > "$WORK/image-bin/chafa" <<'EOF_CHAFA_FAIL'
 #!/usr/bin/env bash
-printf '%s\\n' "$*" >> "$CHAFA_ARGS_LOG"
+printf '%s\n' "$*" >> "$CHAFA_ARGS_LOG"
 [[ "$1" == --format=kitty ]] && exit 1
 exit 0
 EOF_CHAFA_FAIL
@@ -377,7 +377,7 @@ cat > "$WORK/fake-bin/fzf" <<'EOF_FZF'
 exit 130
 EOF_FZF
 chmod +x "$WORK/fake-bin/fzf"
-safe_ls() { printf 'fixture.txt\\n'; }
+safe_ls() { printf 'fixture.txt\n'; }
 f_header_text() { printf 'test header'; }
 COLUMNS=120
 LINES=24

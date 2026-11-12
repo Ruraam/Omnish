@@ -69,19 +69,19 @@ _preview_dims() {
 _preview_detect_image_format() {
     local requested="${OMNISH_IMAGE_FORMAT:-auto}"
     case "$requested" in
-        kitty|sixel|iterm|symbols) printf '%s\\n' "$requested"; return 0 ;;
+        kitty|sixel|iterm|symbols) printf '%s\n' "$requested"; return 0 ;;
         auto|'') ;;
         *) requested=auto ;;
     esac
 
     if [[ -n "${KITTY_PID:-}" || "${TERM:-}" == xterm-kitty ]]; then
-        printf 'kitty\\n'
+        printf 'kitty\n'
     elif [[ "${TERM_PROGRAM:-}" == iTerm.app ]]; then
-        printf 'iterm\\n'
+        printf 'iterm\n'
     elif [[ "${TERM:-}" == foot* || "${TERM:-}" == wezterm || "${TERM_PROGRAM:-}" == WezTerm ]]; then
-        printf 'sixel\\n'
+        printf 'sixel\n'
     else
-        printf 'symbols\\n'
+        printf 'symbols\n'
     fi
 }
 
