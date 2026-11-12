@@ -268,8 +268,6 @@ archive_browse() {
                     fi
                 fi
                 [[ -z "$nested_tmp" ]] || rm -f -- "$nested_tmp"
-            elif (( depth >= max_depth )); then
-                status_msg "nested archive depth limit reached"
             fi
             if command -v less >/dev/null 2>&1; then
                 _archive_stream_member "$archive" "$member_path" 2>/dev/null | less -R
@@ -277,7 +275,8 @@ archive_browse() {
                 _archive_stream_member "$archive" "$member_path" 2>/dev/null | head -n 200
                 printf '\\n[preview limited to 200 lines]\\n'
                 read -rsn 1 -p "Press any key…" </dev/tty 2>/dev/null || :
-            fi        fi
+            fi
+        fi
     done
 }
 _archive_size() {
