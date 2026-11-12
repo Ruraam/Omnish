@@ -91,8 +91,8 @@ loop_main "$1"
             time.sleep(0.02)
         if not resized:
             raise AssertionError("loop backend did not redraw using resized PTY dimensions")
-        # Exit through the real q key; queued CSI bytes are tested below.
-        os.write(master, b"q")
+        # Queue a partial CSI sequence behind q; EXIT cleanup must drain it.
+        os.write(master, b"q\x1b[")
         status = wait_child(pid, 5)
         if not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 0:
             raise AssertionError(f"loop backend exited abnormally: wait status {status}")
