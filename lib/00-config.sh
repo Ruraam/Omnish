@@ -86,7 +86,14 @@ if [[ "$MARGIN_PREVIEW" != "$MARGIN_PREVIEW_FILE" ]]; then
     fi
 fi
 MARGIN_PREVIEW="$MARGIN_PREVIEW_FILE"
-OMNISH_PREVIEW_WIDTH="${OMNISH_PREVIEW_WIDTH:-$(cat "$MARGIN_PREVIEW_FILE" 2>/dev/null || echo 60)}"
-[[ "$OMNISH_PREVIEW_WIDTH" =~ ^[0-9]+%?$ ]] || OMNISH_PREVIEW_WIDTH=60
+# A pristine cache value of 60 is the historical default, not a
+# user override: let each backend choose its responsive layout. Preserve
+# custom cached widths and explicit environment/config overrides.
+if [[ -z "${OMNISH_PREVIEW_WIDTH:-}" ]]; then
+    _omnish_cached_preview_width=$(cat "$MARGIN_PREVIEW_FILE" 2>/dev/null || true)
+    [[ "$_omnish_cached_preview_width" == "60" ]] || OMNISH_PREVIEW_WIDTH="$_omnish_cached_preview_width"
+fi
+[[ "${OMNISH_PREVIEW_WIDTH:-}" =~ ^[0-9]+%?$ ]] || OMNISH_PREVIEW_WIDTH=''
+export TMP_OMNISH_DIR CACHE_OMNISH_DIR CONFIG_OMNISH_DIR MARKED_FILES_FILE
 [[ -d "$OMNI_TRASH" ]] || mkdir -p "$OMNI_TRASH" 2>/dev/null
 PREVIEW_OPENER="$OMNI_OPENER"

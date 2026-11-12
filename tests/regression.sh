@@ -298,6 +298,29 @@ TEST_COLUMNS=120
 loop_draw
 [[ "$loop_preview_visible" -eq 0 ]] || fail "loop short layout did not hide the preview pane"
 grep -Fq 'COLUMNS < 70 || LINES < 10' "$ROOT/lib/70-fzf.sh" || fail "fzf compact-terminal preview breakpoint is missing"
+# fzf must use the same adaptive width policy as loop, while preserving
+# explicit user overrides and returning cancellation to its caller.
+source "$ROOT/lib/70-fzf.sh"
+[[ "$(fzf_preview_width 120 24 "")" == 72 ]] || fail "fzf landscape preview did not receive 60% width"
+[[ "$(fzf_preview_width 80 100 "")" == 40 ]] || fail "fzf portrait preview did not receive 50% width"
+[[ "$(fzf_preview_width 120 24 55)" == 55 ]] || fail "fzf ignored an explicit preview width"
+[[ "$(fzf_preview_width 120 24 90)" == 72 ]] || fail "fzf did not cap an explicit width to the adaptive maximum"
+
+# A real fzf abort exits with status 130. fzf_binds must propagate that
+# status so fzf_main breaks rather than reopening an empty selection.
+mkdir -p -- "$WORK/fake-bin"
+cat > "$WORK/fake-bin/fzf" <<'EOF_FZF'
+#!/usr/bin/env bash
+exit 130
+EOF_FZF
+chmod +x "$WORK/fake-bin/fzf"
+safe_ls() { printf 'fixture.txt\\n'; }
+f_header_text() { printf 'test header'; }
+COLUMNS=120
+LINES=24
+if PATH="$WORK/fake-bin:$PATH" fzf_binds "$WORK"; then
+    fail "fzf abort status 130 was not propagated"
+fi
 
 # Tab, Space and Shift-Tab must mutate the same persistent mark set.
 mkdir -p -- "$WORK/loop-select"
