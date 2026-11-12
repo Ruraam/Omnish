@@ -206,7 +206,7 @@ fzf_binds() {
     local path="$1"
     local header_text margin_preview
     header_text=$(f_header_text)
-    margin_preview="${OMNISH_PREVIEW_WIDTH:-$(cat "$MARGIN_PREVIEW" 2>/dev/null || echo 60)}"
+    margin_preview="${OMNISH_PREVIEW_WIDTH:-$(cat "$MARGIN_PREVIEW" 2>/dev/null || true)}"
 
     local hidepreview=''
     [[ -f "$CACHE_OMNISH_DIR/hidepreview" ]] && hidepreview=':hidden'
@@ -217,10 +217,17 @@ fzf_binds() {
     if (( COLUMNS < 70 || LINES < 10 )); then
         preview_window='hidden'
     else
+        local max_preview
+        if (( COLUMNS > LINES )); then
+            max_preview=$(( COLUMNS * 60 / 100 ))
+        else
+            max_preview=$(( COLUMNS * 50 / 100 ))
+        fi
+        (( max_preview < 1 )) && max_preview=1
         if [[ "$margin_preview" =~ ^[0-9]+$ ]]; then
-            local max_preview=$(( COLUMNS * 45 / 100 ))
-            (( max_preview < 1 )) && max_preview=1
             (( margin_preview > max_preview )) && margin_preview=$max_preview
+        else
+            margin_preview=$max_preview
         fi
         preview_window="right:${margin_preview}:noborder${hidepreview}"
     fi

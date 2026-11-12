@@ -225,7 +225,13 @@ loop_draw() {
     (( rows < 1 )) && rows=1
 
     if (( COLUMNS >= 70 && LINES >= 10 )) && [[ ! -f "$CACHE_OMNISH_DIR/hidepreview" ]]; then
-        split=$(( COLUMNS * 45 / 100 ))
+        # Portrait: balanced 50/50. Landscape: give the preview 60%
+        # while keeping the file list wide enough for names and navigation.
+        if (( COLUMNS > LINES )); then
+            split=$(( COLUMNS * 40 / 100 ))
+        else
+            split=$(( COLUMNS * 50 / 100 ))
+        fi
         list_w=$(( split - 2 ))
         prev_w=$(( COLUMNS - split - 2 ))
         (( list_w < 1 )) && list_w=1

@@ -267,7 +267,7 @@ printf 'hidden\n' > "$WORK/loop-list/.hidden-file"
 
 
 # Responsive layout policy: both backends keep the side preview from 70 columns
-# upward and hide it only below that width or below 10 rows.
+# upward. Portrait is balanced 50/50; landscape gives 60% to the preview.
 get_term_size() { LINES=$TEST_LINES; COLUMNS=$TEST_COLUMNS; }
 loop_print_line() { :; }
 loop_draw_preview() { :; }
@@ -284,11 +284,15 @@ loop_draw
 TEST_LINES=24
 TEST_COLUMNS=80
 loop_draw
-[[ "$loop_preview_visible" -eq 1 && "$loop_list_width" -eq 34 && "$loop_preview_width" -eq 42 ]] || fail "loop 80-column layout did not show the side preview"
+[[ "$loop_preview_visible" -eq 1 && "$loop_list_width" -eq 30 && "$loop_preview_width" -eq 46 ]] || fail "loop landscape 80-column layout did not allocate 40/60 panes"
 TEST_LINES=24
 TEST_COLUMNS=120
 loop_draw
-[[ "$loop_preview_visible" -eq 1 && "$loop_list_width" -eq 52 && "$loop_preview_width" -eq 64 ]] || fail "loop wide layout did not allocate list and preview panes"
+[[ "$loop_preview_visible" -eq 1 && "$loop_list_width" -eq 46 && "$loop_preview_width" -eq 70 ]] || fail "loop wide landscape layout did not allocate 40/60 panes"
+TEST_LINES=100
+TEST_COLUMNS=50
+loop_draw
+[[ "$loop_preview_visible" -eq 1 && "$loop_list_width" -eq 23 && "$loop_preview_width" -eq 25 ]] || fail "loop portrait layout did not preserve the 50/50 split"
 TEST_LINES=8
 TEST_COLUMNS=120
 loop_draw
