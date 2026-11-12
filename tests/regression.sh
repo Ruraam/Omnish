@@ -512,6 +512,7 @@ archive_is_supported "$WORK/future.lpk" || fail "future .lpk extension was not r
 if archive_is_supported "$WORK/not-an-archive.txt"; then fail "plain text file was classified as an archive"; fi
 archive_index="$(_archive_list_to "$archive_file")"
 [[ "$archive_index" == *"nested/file with spaces.txt"* ]] || fail "tar archive index omitted nested member"
+[[ "$(_archive_stream_member "$archive_file" "./nested/file with spaces.txt")" == "archive payload" ]] || fail "archive member streaming failed for ./ paths"
 cp -- "$archive_file" "$WORK/future.lpk"
 [[ "$(_archive_kind "$WORK/future.lpk")" == tar ]] || fail "tar-backed .lpk detection failed"
 _omnish_select() { printf '%s\n' 'tar.gz — compatible'; }
