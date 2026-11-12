@@ -314,7 +314,7 @@ fzf_binds() {
             --bind 'alt-l:execute-silent({ [ ! -f "$CACHE_OMNISH_DIR/longfilemanager" ] && touch "$CACHE_OMNISH_DIR/longfilemanager"; } || rm -f "$CACHE_OMNISH_DIR/longfilemanager")+top+accept' \
             --bind 'ctrl-p:toggle-preview+execute-silent({ [ ! -f "$CACHE_OMNISH_DIR/hidepreview" ] && touch "$CACHE_OMNISH_DIR/hidepreview"; } || rm -f "$CACHE_OMNISH_DIR/hidepreview")+top+accept' \
             --bind 'esc:abort,ctrl-q:abort,ctrl-c:abort' \
-            --preview 'bash "$OMNISH_ENTRYPOINT" --preview-file "$OMNISH_PREVIEW_BASE"/{}' \
+            --preview 'OMNISH_PREVIEW_BACKEND=fzf bash "$OMNISH_ENTRYPOINT" --preview-file "$OMNISH_PREVIEW_BASE"/{}' \
             --preview-window "$preview_window" \
             --expect=enter,right) || fzf_status=$?
 

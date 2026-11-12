@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Focused regression tests for runtime ownership, file operations and trash.
 set -euo pipefail
-trap 'rc=$?; printf "FAIL: regression command at line %s (exit %s): %s\\n" "$LINENO" "$rc" "$BASH_COMMAND" >&2; exit "$rc"' ERR
+trap 'rc=$?; printf "FAIL: regression command at line %s (exit %s): %s\n" "$LINENO" "$rc" "$BASH_COMMAND" >&2; exit "$rc"' ERR
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 WORK="$(mktemp -d)"
@@ -16,6 +16,7 @@ mkdir -p -- "$HOME" "$WORK/external-runtime"
 export OMNISH_RUNTIME_DIR="$WORK/external-runtime"
 source "$ROOT/lib/00-config.sh"
 source "$ROOT/lib/10-utils.sh"
+source "$ROOT/lib/30-preview.sh"
 source "$ROOT/lib/65-scratchpad.sh"
 
 status_msg() { :; }
@@ -28,6 +29,104 @@ fail() {
     printf 'FAIL: %s\n' "$1" >&2
     exit 1
 }
+
+
+# Chafa image protocol selection is passive and backend-safe.
+mkdir -p -- "$WORK/image-bin"
+cat > "$WORK/image-bin/chafa" <<'EOF_CHAFA'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$CHAFA_ARGS_LOG"
+if [[ "${CHAFA_FAIL_FORMAT:-}" == *"$2"* && "$1" == --format=* ]]; then
+    exit 1
+fi
+exit 0
+EOF_CHAFA
+chmod +x "$WORK/image-bin/chafa"
+export CHAFA_ARGS_LOG="$WORK/chafa-args.log"
+: > "$CHAFA_ARGS_LOG"
+PATH="$WORK/image-bin:$PATH"
+
+unset OMNISH_IMAGE_FORMAT KITTY_PID
+export TERM=xterm-kitty
+[[ "$(_preview_detect_image_format)" == kitty ]] || fail "Kitty was not detected from TERM"
+export KITTY_PID=123
+export TERM=xterm-kitty
+[[ "$(_preview_detect_image_format)" == kitty ]] || fail "Kitty was not detected from KITTY_PID"
+unset KITTY_PID
+export TERM=xterm-256color
+export TERM_PROGRAM=iTerm.app
+[[ "$(_preview_detect_image_format)" == iterm ]] || fail "iTerm2 was not detected passively"
+export TERM_PROGRAM=WezTerm
+[[ "$(_preview_detect_image_format)" == sixel ]] || fail "WezTerm Sixel capability was not detected passively"
+unset TERM_PROGRAM
+export TERM=foot
+[[ "$(_preview_detect_image_format)" == sixel ]] || fail "foot Sixel capability was not detected passively"
+export TERM=xterm-256color
+[[ "$(_preview_detect_image_format)" == symbols ]] || fail "unknown terminal did not use safe symbols fallback"
+
+# Chafa names its 24-bit mode "full", not "24bit". Exercise the fzf
+# symbols path with a truecolor terminal so fallback rendering stays valid.
+: > "$CHAFA_ARGS_LOG"
+OMNISH_IMAGE_FORMAT=symbols
+OMNISH_PREVIEW_BACKEND=fzf
+COLORTERM=truecolor
+_preview_image "$WORK/fixture.png" 48 18 || fail "truecolor symbols preview failed"
+grep -Fq -- '--colors=full' "$CHAFA_ARGS_LOG" || fail "truecolor symbols preview did not use Chafa's full color mode"
+unset OMNISH_IMAGE_FORMAT COLORTERM OMNISH_PREVIEW_BACKEND
+
+# loop must remain textual, but use the high-detail Chafa glyph and color pipeline.
+: > "$CHAFA_ARGS_LOG"
+KITTY_PID=123
+OMNISH_PREVIEW_BACKEND=loop
+OMNISH_IMAGE_QUALITY=high
+_preview_image "$WORK/fixture.png" 40 16 || fail "loop Chafa preview failed"
+grep -Fq -- '--format=symbols' "$CHAFA_ARGS_LOG" || fail "loop did not force symbols"
+grep -Fq -- '--symbols=block+border+diagonal+dot+quad+half+braille+geometric+inverted' "$CHAFA_ARGS_LOG" || fail "loop did not enable detailed glyphs"
+grep -Fq -- '--colors=full' "$CHAFA_ARGS_LOG" || fail "loop did not force 24bit colour"
+grep -Fq -- '--work=9' "$CHAFA_ARGS_LOG" || fail "high quality did not use Chafa work level 9"
+grep -Fq -- '--color-space=din99d' "$CHAFA_ARGS_LOG" || fail "high quality did not use perceptual color space"
+grep -Fq -- '--color-extractor=median' "$CHAFA_ARGS_LOG" || fail "high quality did not use median color extraction"
+! grep -Eq -- '--format=(kitty|sixel|iterm)' "$CHAFA_ARGS_LOG" || fail "loop emitted a graphical protocol"
+: > "$CHAFA_ARGS_LOG"
+OMNISH_IMAGE_QUALITY=fast
+_preview_image "$WORK/fixture.png" 40 16 || fail "fast loop Chafa preview failed"
+grep -Fq -- '--work=2' "$CHAFA_ARGS_LOG" || fail "fast quality did not reduce Chafa work"
+grep -Fq -- '--colors=full' "$CHAFA_ARGS_LOG" || fail "loop fast quality did not preserve 24bit colour"
+OMNISH_IMAGE_QUALITY=high
+
+# fzf can use Kitty directly; a failed protocol falls back to safe symbols.
+: > "$CHAFA_ARGS_LOG"
+OMNISH_PREVIEW_BACKEND=fzf
+_preview_image "$WORK/fixture.png" 48 18 || fail "fzf Chafa preview failed"
+grep -Fq -- '--format=kitty' "$CHAFA_ARGS_LOG" || fail "fzf did not select Kitty graphics"
+: > "$CHAFA_ARGS_LOG"
+cat > "$WORK/image-bin/chafa" <<'EOF_CHAFA_FAIL'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$CHAFA_ARGS_LOG"
+[[ "$1" == --format=kitty ]] && exit 1
+exit 0
+EOF_CHAFA_FAIL
+chmod +x "$WORK/image-bin/chafa"
+_preview_image "$WORK/fixture.png" 48 18 || fail "fzf did not fall back after a protocol render failure"
+grep -Fq -- '--format=symbols' "$CHAFA_ARGS_LOG" || fail "fzf protocol failure did not fall back to symbols"
+# Failed image rendering must never fall through to raw SVG/XML or image bytes.
+cat > "$WORK/image-bin/chafa" <<'EOF_CHAFA_FAIL_ALL'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$CHAFA_ARGS_LOG"
+exit 2
+EOF_CHAFA_FAIL_ALL
+chmod +x "$WORK/image-bin/chafa"
+printf '<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>\n' > "$WORK/fixture.svg"
+printf '\211PNG\r\n\032\n' > "$WORK/fixture.png"
+for image in "$WORK/fixture.svg" "$WORK/fixture.png"; do
+    image_preview_output=$(_preview_file "$image")
+    [[ "$image_preview_output" == *"image preview unavailable"* ]] || fail "failed image rendering did not show a clear diagnostic"
+    [[ "$image_preview_output" != *"<svg"* ]] || fail "failed SVG preview leaked XML source"
+    [[ "$image_preview_output" != *"PNG"* ]] || fail "failed PNG preview leaked binary signature"
+done
+
+unset KITTY_PID OMNISH_PREVIEW_BACKEND
+export TERM=xterm-256color
 
 # Caller-owned runtime directories must survive cleanup.
 cleanup
@@ -314,7 +413,7 @@ cat > "$WORK/fake-bin/fzf" <<'EOF_FZF'
 exit 130
 EOF_FZF
 chmod +x "$WORK/fake-bin/fzf"
-safe_ls() { printf 'fixture.txt\\n'; }
+safe_ls() { printf 'fixture.txt\n'; }
 f_header_text() { printf 'test header'; }
 COLUMNS=120
 LINES=24

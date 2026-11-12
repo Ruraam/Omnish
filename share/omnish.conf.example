@@ -14,5 +14,9 @@
 # Preview margin (chars from right edge)
 #MARGIN_PREVIEW=60
 
+# Image previews (Chafa only)
+#OMNISH_IMAGE_FORMAT=auto   # auto | kitty | sixel | iterm | symbols
+#OMNISH_IMAGE_QUALITY=high  # high | balanced | fast
+
 # Terminal name (auto-detected if unset)
 #MY_TERMINAL="kitty"

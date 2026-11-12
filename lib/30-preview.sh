@@ -63,6 +63,112 @@ _preview_dims() {
 }
 
 # ===============================================================
+# Passive image protocol selection and Chafa renderer
+# Never query the terminal: protocol selection uses environment only.
+# ===============================================================
+_preview_detect_image_format() {
+    local requested="${OMNISH_IMAGE_FORMAT:-auto}"
+    case "$requested" in
+        kitty|sixel|iterm|symbols) printf '%s\n' "$requested"; return 0 ;;
+        auto|'') ;;
+        *) requested=auto ;;
+    esac
+
+    if [[ -n "${KITTY_PID:-}" || "${TERM:-}" == xterm-kitty ]]; then
+        printf 'kitty\n'
+    elif [[ "${TERM_PROGRAM:-}" == iTerm.app ]]; then
+        printf 'iterm\n'
+    elif [[ "${TERM:-}" == foot* || "${TERM:-}" == wezterm || "${TERM_PROGRAM:-}" == WezTerm ]]; then
+        printf 'sixel\n'
+    else
+        printf 'symbols\n'
+    fi
+}
+
+_preview_image() {
+    local file="$1" width="$2" height="$3"
+    local backend="${OMNISH_PREVIEW_BACKEND:-${OMNISH_BACKEND:-auto}}"
+    local format quality colors work color_space extractor symbols
+    format=$(_preview_detect_image_format)
+    quality="${OMNISH_IMAGE_QUALITY:-high}"
+
+    case "$quality" in
+        high)
+            colors=full
+            work=9
+            color_space=din99d
+            extractor=median
+            symbols='block+border+diagonal+dot+quad+half+braille+geometric+inverted'
+            ;;
+        balanced)
+            colors=256
+            work=5
+            color_space=rgb
+            extractor=median
+            symbols='block+border+diagonal+dot+quad+half+braille+geometric+inverted'
+            ;;
+        fast)
+            colors=16
+            work=2
+            color_space=rgb
+            extractor=average
+            symbols='block+border+half+vhalf'
+            ;;
+        *)
+            quality=high
+            colors=full
+            work=9
+            color_space=din99d
+            extractor=median
+            symbols='block+border+diagonal+dot+quad+half+braille+geometric+inverted'
+            ;;
+    esac
+
+    # loop_draw_preview clips output line by line. Keep it strictly textual,
+    # but use a richer glyph set than vhalf for substantially more detail.
+    if [[ "$backend" == loop ]]; then
+        if chafa --format=symbols --symbols="$symbols" --colors=full \
+            --work="$work" --color-space="$color_space" \
+            --color-extractor="$extractor" --size="${width}x${height}" \
+            -- "$file" 2>/dev/null; then
+            return 0
+        fi
+        # Older Chafa builds may not support every quality option/glyph class.
+        chafa --format=symbols --symbols=vhalf --colors=full \
+            --size="${width}x${height}" -- "$file" 2>/dev/null
+        return $?
+    fi
+
+    [[ "$format" == symbols && "${COLORTERM:-}" != *truecolor* && "${COLORTERM:-}" != *24bit* ]] && {
+        [[ "$quality" == high ]] && colors=256
+    }
+
+    # Graphical protocols are emitted directly by Chafa to fzf's preview
+    # process. No Bash line clipping/folding touches these escape streams.
+    local chafa_format="$format"
+    [[ "$chafa_format" == sixel ]] && chafa_format=sixels
+    if [[ "$chafa_format" != symbols ]]; then
+        if chafa --format="$chafa_format" --work="$work" \
+            --color-space="$color_space" --color-extractor="$extractor" \
+            --size="${width}x${height}" -- "$file" 2>/dev/null; then
+            return 0
+        fi
+        # A stale or inaccurate environment hint must never break previews.
+    fi
+
+    if chafa --format=symbols --symbols="$symbols" --colors="$colors" \
+        --work="$work" --color-space="$color_space" \
+        --color-extractor="$extractor" --size="${width}x${height}" \
+        -- "$file" 2>/dev/null; then
+        return 0
+    fi
+
+    # Compatibility fallback for older Chafa releases.
+    chafa --format=symbols --symbols=vhalf --colors="$colors" \
+        --size="${width}x${height}" -- "$file" 2>/dev/null
+}
+
+# ===============================================================
 # _preview_file — main entry
 # ===============================================================
 _preview_file() {
@@ -102,13 +208,20 @@ _preview_file() {
     printf '\e[36mFile: %s\e[m\n\n' "${file##*/}"
 
     case "$file_ext" in
-        png|jpg|jpeg|gif|webp|bmp|svg)
+        png|jpg|jpeg|gif|webp|bmp|svg|avif|qoi|tif|tiff|ico)
             if command -v chafa >/dev/null 2>&1; then
-                # [FIX 12] Scale image to fit pane
+                # Chafa owns rendering; keep graphical escape streams out of
+                # loop's line-oriented clipping path via _preview_image.
                 local img_h=$(( sizeline - 2 ))
                 (( img_h < 5 )) && img_h=5
-                chafa -s "${width}x${img_h}" -- "$file" 2>/dev/null && return
+                if _preview_image "$file" "$width" "$img_h"; then
+                    return 0
+                fi
+                printf '(image preview unavailable: Chafa could not decode or render this file)\n'
+            else
+                printf '(image preview unavailable: install Chafa)\n'
             fi
+            return 0
             ;;
         pdf)
             if command -v pdftotext >/dev/null 2>&1; then
