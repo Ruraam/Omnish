@@ -19,24 +19,30 @@ while (( $# > 0 )); do
     shift
 done
 
-PREFIX="${PREFIX:-$HOME/.local}"
-
-if [[ -z "$PREFIX" || "$PREFIX" == "/" ]]; then
-    echo "error: refusing to run with PREFIX='$PREFIX'" >&2
+: "${HOME:?HOME must be set}"
+if (( EUID == 0 )); then
+    echo "error: refusing to uninstall as root; run as your normal user without sudo" >&2
     exit 1
 fi
-
-resolved=$(realpath -m "$PREFIX" 2>/dev/null || echo "$PREFIX")
+HOME_CANON="$(cd -P -- "$HOME" && pwd -P)" || {
+    echo "error: cannot resolve HOME" >&2
+    exit 1
+}
+PREFIX="${PREFIX:-$HOME_CANON/.local}"
+if [[ "$PREFIX" != /* ]]; then
+    echo "error: PREFIX must be an absolute path inside HOME" >&2
+    exit 1
+fi
+resolved="$(realpath -m -- "$PREFIX" 2>/dev/null)" || {
+    echo "error: cannot resolve PREFIX='$PREFIX'" >&2
+    exit 1
+}
 case "$resolved" in
-    /usr|/usr/local|/etc|/home|/opt|/root|/var|/bin|/sbin|/lib*|\
-    /usr/*|/etc/*|/home/*|/opt/*|/root/*|/var/*)
-        case "$resolved" in
-            /usr/local/*|/home/*/.local/*|/root/.local/*) ;;
-            *) echo "error: PREFIX='$PREFIX' resolves to system path ($resolved)" >&2
-               exit 1 ;;
-        esac ;;
+    "$HOME_CANON"/*) ;;
+    *) echo "error: PREFIX must stay inside HOME ($HOME_CANON); system-wide paths are not supported" >&2
+       exit 1 ;;
 esac
-(( ${#resolved} < 5 )) && { echo "error: PREFIX too short" >&2; exit 1; }
+PREFIX="$resolved"
 
 BIN="$PREFIX/bin/omnish"
 SHARE="$PREFIX/share/omnish"
