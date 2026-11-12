@@ -10,7 +10,6 @@ import struct
 import tempfile
 import termios
 import time
-import tty
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -56,19 +55,14 @@ def loop_resize_and_exit_test(tmp):
     if pid == 0:
         fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
         env = os.environ.copy()
-        env.update({"OMNISH_TEST_ROOT": ROOT, "OMNISH_TEST_TRACE": trace, "OMNISH_TEST_ERROR": os.path.join(tmp, "child.err"),
+        env.update({"OMNISH_TEST_ROOT": ROOT, "OMNISH_TEST_TRACE": trace,
                     "OMNISH_RUNTIME_DIR": os.path.join(tmp, "runtime"),
                     "OMNI_CD_ON_EXIT": "0"})
         script = r'''
 set -euo pipefail
-exec 2>"$OMNISH_TEST_ERROR"
-printf 'CHILD-START\\n'
 source "$OMNISH_TEST_ROOT/lib/00-config.sh"
-printf 'CONFIG-LOADED\\n'
 source "$OMNISH_TEST_ROOT/lib/10-utils.sh"
-printf 'UTILS-LOADED\\n'
 source "$OMNISH_TEST_ROOT/lib/70-loop.sh"
-printf 'LOOP-LOADED\\n'
 loop_read_dir() { loop_list=("fixture"); loop_total=0; loop_prev_idx=0; }
 loop_rebuild_visual_marks() { :; }
 loop_draw() {
@@ -80,15 +74,7 @@ loop_main "$1"
 '''
         os.execvpe("bash", ["bash", "-c", script, "pty-loop", target], env)
     try:
-        try:
-            read_until(master, b"DRAW", 5)
-        except AssertionError as exc:
-            error_log = ""
-            error_path = os.path.join(tmp, "child.err")
-            if os.path.exists(error_path):
-                with open(error_path, encoding="utf-8") as stream:
-                    error_log = stream.read()
-            raise AssertionError(f"{exc}; child stderr={error_log!r}") from exc
+        read_until(master, b"DRAW", 5)
         deadline = time.monotonic() + 3
         while not os.path.exists(trace) and time.monotonic() < deadline:
             time.sleep(0.01)
@@ -105,7 +91,7 @@ loop_main "$1"
             time.sleep(0.02)
         if not resized:
             raise AssertionError("loop backend did not redraw using resized PTY dimensions")
-        # Queue a partial CSI sequence behind q. EXIT cleanup must consume it.
+        # Exit through the real q key; queued CSI bytes are tested below.
         os.write(master, b"q")
         status = wait_child(pid, 5)
         if not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 0:
@@ -132,10 +118,8 @@ stty -icanon -echo min 1 time 0 </dev/tty
 before=$(stty -g </dev/tty)
 printf 'READY\\n'
 IFS= read -rsn 1 token </dev/tty
-printf 'GOT-TOKEN\\n'
 [[ "$token" == X ]]
 _omnish_flush_tty_input
-printf 'AFTER-FLUSH\\n'
 after=$(stty -g </dev/tty)
 [[ "$before" == "$after" ]] || { printf 'TERMios-MISMATCH\\n'; exit 8; }
 if IFS= read -rsn 1 -t 0.15 leaked </dev/tty 2>/dev/null; then
@@ -150,7 +134,7 @@ printf 'FLUSH-CLEAN\\n'
         os.execvpe("bash", ["bash", "-c", script], env)
     try:
         read_until(master, b"READY", 5)
-        os.write(master, b"X\\x1b[")
+        os.write(master, b"X\x1b[")
         output = read_until(master, b"FLUSH-CLEAN", 5)
         status = wait_child(pid, 5)
         if not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 0:
