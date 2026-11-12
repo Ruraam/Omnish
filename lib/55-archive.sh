@@ -7,31 +7,66 @@ archive_is_supported() {
         *) return 1 ;;
     esac
 }
+_archive_magic_hex() {
+    od -An -tx1 -N "\${3:-8}" -j "\${2:-0}" -- "$1" 2>/dev/null | tr -d ' \n'
+}
+_archive_libarchive_valid() {
+    command -v bsdtar >/dev/null 2>&1 && bsdtar -tf "$1" >/dev/null 2>&1
+}
 _archive_kind() {
-    case "${1##*/}" in
-        *.deb) printf deb ;;
-        *.zip|*.apk) printf zip ;;
-        *.tar|*.tar.*|*.tgz|*.tzst|*.txz|*.tbz2) printf tar ;;
-        *.rar|*.7z|*.iso|*.cab|*.ar)
-            if command -v bsdtar >/dev/null 2>&1 && bsdtar -tf "$1" >/dev/null 2>&1; then
-                printf libarchive
-            else
-                printf unknown
-            fi
-            ;;
-        *.lpk)
-            if [[ "$(head -c 4 -- "$1" 2>/dev/null)" == hsqs ]] && command -v unsquashfs >/dev/null 2>&1; then
-                printf lpk
-            elif tar -tf "$1" >/dev/null 2>&1; then
-                printf tar
-            elif command -v unzip >/dev/null 2>&1 && unzip -Z1 "$1" >/dev/null 2>&1; then
-                printf zip
-            else
-                printf unknown
-            fi
-            ;;
-        *) printf unknown ;;
+    local archive="$1" name="\${1##*/}" magic
+    [[ -f "$archive" && -r "$archive" ]] || { printf unknown; return; }
+    magic="$(_archive_magic_hex "$archive" 0 8)"
+    if [[ "$magic" == 68737173 ]]; then
+        if command -v unsquashfs >/dev/null 2>&1 && unsquashfs -s "$archive" >/dev/null 2>&1; then printf lpk
+        else printf unknown; fi
+        return
+    fi
+    case "$magic" in
+        504b0304*|504b0506*|504b0708*)
+            if command -v unzip >/dev/null 2>&1 && unzip -Z1 "$archive" >/dev/null 2>&1; then printf zip
+            else printf unknown; fi
+            return ;;
+        213c617263683e0a)
+            if [[ "$name" == *.deb ]] && command -v dpkg-deb >/dev/null 2>&1 && dpkg-deb --info "$archive" >/dev/null 2>&1; then printf deb
+            elif _archive_libarchive_valid "$archive"; then printf libarchive
+            else printf unknown; fi
+            return ;;
+        1f8b*)
+            if tar -tzf "$archive" >/dev/null 2>&1; then printf tar; else printf unknown; fi
+            return ;;
+        28b52ffd*)
+            if tar --zstd -tf "$archive" >/dev/null 2>&1; then printf tar
+            elif _archive_libarchive_valid "$archive"; then printf libarchive
+            else printf unknown; fi
+            return ;;
+        fd377a585a00*)
+            if tar -tJf "$archive" >/dev/null 2>&1; then printf tar; else printf unknown; fi
+            return ;;
+        425a68*)
+            if tar -tjf "$archive" >/dev/null 2>&1; then printf tar; else printf unknown; fi
+            return ;;
     esac
+    if [[ "$(_archive_magic_hex "$archive" 257 5)" == 7573746172 ]] || [[ "$name" == *.tar ]]; then
+        if tar -tf "$archive" >/dev/null 2>&1; then printf tar; else printf unknown; fi
+        return
+    fi
+    case "$magic" in
+        377abcaf271c*|526172211a0700*|526172211a070100*|4d534346*)
+            if _archive_libarchive_valid "$archive"; then printf libarchive; else printf unknown; fi
+            return ;;
+    esac
+    if [[ "$(_archive_magic_hex "$archive" 32769 5)" == 4344303031 ]]; then
+        if _archive_libarchive_valid "$archive"; then printf libarchive; else printf unknown; fi
+        return
+    fi
+    if [[ "$name" == *.lpk ]]; then
+        if tar -tf "$archive" >/dev/null 2>&1; then printf tar
+        elif command -v unzip >/dev/null 2>&1 && unzip -Z1 "$archive" >/dev/null 2>&1; then printf zip
+        else printf unknown; fi
+        return
+    fi
+    printf unknown
 }
 # ULPM LPK v5: zstd-compressed SquashFS with an optional 104-byte
 # Ed25519 trailer. Omnish only reads the container; it never verifies trust,
