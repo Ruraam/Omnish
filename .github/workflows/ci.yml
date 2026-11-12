@@ -33,5 +33,17 @@ jobs:
         run: bash tests/regression.sh
       - name: Installer integration tests
         run: bash tests/install.sh
+      - name: Checkout ULPM packaging engine
+        uses: actions/checkout@v4
+        with:
+          repository: Ruraam/ulpm
+          ref: main
+          path: ulpm-src
+      - name: Install SquashFS and ULPM packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y squashfs-tools zstd jq openssl file
+      - name: Real ULPM LPK integration
+        run: bash tests/lpk_ulpm_integration.sh "$GITHUB_WORKSPACE/ulpm-src"
       - name: PTY integration tests
         run: python3 tests/pty_integration.py
