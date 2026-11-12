@@ -500,4 +500,19 @@ ln -s -- "$WORK/target" "$scratch_file"
 if scratchpad_prepare >/dev/null 2>&1; then fail "scratchpad followed a symlink"; fi
 rm -f -- "$scratch_file"
 
+# Quick Archive format detection and read-only index support.
+source "$ROOT/lib/55-archive.sh"
+archive_fixture="$WORK/archive-fixture"
+mkdir -p -- "$archive_fixture/nested"
+printf 'archive payload\n' > "$archive_fixture/nested/file with spaces.txt"
+archive_file="$WORK/quick-archive-fixture.tar.gz"
+tar -czf "$archive_file" -C "$archive_fixture" .
+archive_is_supported "$archive_file" || fail "tar.gz was not detected as an archive"
+archive_is_supported "$WORK/future.lpk" || fail "future .lpk extension was not recognized"
+if archive_is_supported "$WORK/not-an-archive.txt"; then fail "plain text file was classified as an archive"; fi
+archive_index="$(_archive_list_to "$archive_file")"
+[[ "$archive_index" == *"nested/file with spaces.txt"* ]] || fail "tar archive index omitted nested member"
+cp -- "$archive_file" "$WORK/future.lpk"
+[[ "$(_archive_kind "$WORK/future.lpk")" == tar ]] || fail "tar-backed .lpk detection failed"
+
 printf 'PASS: runtime ownership, file-operation guards, scratchpad and trash restore regressions\n'
