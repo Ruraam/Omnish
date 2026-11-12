@@ -22,6 +22,7 @@ USAGE
     --list-files [DIR]       Print raw listing of DIR
     --dua [DIR]              Launch disk usage panel directly on DIR
     --preview-file PATH      Print preview of PATH
+    --scratchpad [PATH]      Open the private Markdown scratchpad
 
 ═══════════════════════════════════════════════════════════════════════════
 NAVIGATION
@@ -29,6 +30,7 @@ NAVIGATION
   Enter/→          Open / descend         ←/h/⌫       Go up one level
   g / G            Top / bottom           F5 / ^R     Refresh listing
   F1 / ?           This help              Esc/^Q/^C   Quit (loop: q|Esc)
+  F2 / ^Space      Open Scratchpad (notes, TODO, clipboard, path)
   ^P               Toggle preview
   alt-h            Toggle hidden files    (loop: . also works)
   alt-l            Toggle long listing
@@ -138,6 +140,10 @@ CONFIG FILE
     CPU_HOOK_SCRIPT=""
     CPU_MONITOR_REFRESH=1
     CPU_WIDGET_CACHE_TTL=2
+
+  Scratchpad
+    File: $XDG_DATA_HOME/omnish/scratchpad.md (default ~/.local/share/)
+    Created with mode 600; clipboard: wl-paste, xclip, xsel, Termux
 
   Favorites
     OMNI_FAV_1=~/Documents

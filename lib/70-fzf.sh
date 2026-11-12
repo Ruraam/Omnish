@@ -256,6 +256,7 @@ fzf_binds() {
             --bind '?:preview(cat "$TMP_OMNISH_DIR/help.txt" 2>/dev/null || echo "help unavailable")' \
             --bind 'ctrl-h:change-preview(cat "$TMP_OMNISH_DIR/help.txt" 2>/dev/null || echo "help unavailable")+show-preview' \
             --bind 'f1:execute(bash "$OMNISH_ENTRYPOINT" --show-help {})' \
+            --bind 'f2,ctrl-space:execute(bash "$OMNISH_ENTRYPOINT" --scratchpad {})' \
             --bind 'ctrl-x:execute(bash "$OMNISH_ENTRYPOINT" --system-menu)+top+accept' \
             --bind 'ctrl-o:execute(bash "$OMNISH_ENTRYPOINT" --xdg-open {})+top+accept' \
             --bind 'ctrl-v:execute(bash "$OMNISH_ENTRYPOINT" --move-file {})+top+accept' \

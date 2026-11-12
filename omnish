@@ -136,6 +136,7 @@ case "${1:-}" in
         ;;
 
     --show-help)         shift; dialog_help ;;
+    --scratchpad)        shift; scratchpad_open "${1:-}" ;;
     --preview-file)      shift; [[ $# -ge 1 ]] || { echo "error: --preview-file requires PATH" >&2; exit 2; }; _preview_file "$1" ;;
     --dua)               shift; _dua_interactive "${1:-$PWD}" ;;
     --dua-preview)       shift; [[ $# -ge 1 ]] || { echo "error: --dua-preview requires PATH" >&2; exit 2; }; _dua_preview "$1" ;;

@@ -16,6 +16,7 @@ mkdir -p -- "$HOME" "$WORK/external-runtime"
 export OMNISH_RUNTIME_DIR="$WORK/external-runtime"
 source "$ROOT/lib/00-config.sh"
 source "$ROOT/lib/10-utils.sh"
+source "$ROOT/lib/65-scratchpad.sh"
 
 status_msg() { :; }
 spinner_begin() { :; }
@@ -325,4 +326,27 @@ loop_process_resize
 [[ "$resize_draws" -eq 1 && "$resize_size_reads" -eq 1 ]] || fail "loop did not process a deferred SIGWINCH"
 [[ "$loop_resize_pending" -eq 0 ]] || fail "loop did not clear the pending resize flag"
 
-printf 'PASS: runtime ownership, file-operation guards and trash restore regressions\n'
+
+# Scratchpad persistence, permissions, path insertion and clipboard import.
+scratch_file="$(scratchpad_prepare)"
+[[ "$scratch_file" == "$XDG_DATA_HOME/omnish/scratchpad.md" ]] || fail "scratchpad ignored XDG_DATA_HOME"
+[[ "$(stat -c '%a' "$scratch_file")" == 600 ]] || fail "scratchpad was not created mode 600"
+scratchpad_append '### Note' 'sha256: deadbeef'
+scratchpad_append '- [ ] TODO' 'review the pending patch'
+[[ "$(stat -c '%a' "$scratch_file")" == 600 ]] || fail "scratchpad permissions changed after append"
+grep -Fq 'sha256: deadbeef' "$scratch_file" || fail "scratchpad note was not persisted"
+grep -Fq -- '- [ ] TODO' "$scratch_file" || fail "scratchpad TODO was not persisted"
+(
+    cd -- "$WORK"
+    scratchpad_insert_path 'path with spaces.txt'
+)
+grep -Fq "\`$WORK/path with spaces.txt\`" "$scratch_file" || fail "scratchpad did not insert selected path safely"
+wl-paste() { printf 'clipboard payload'; }
+scratchpad_insert_clipboard || fail "scratchpad clipboard import failed with wl-paste"
+grep -Fq 'clipboard payload' "$scratch_file" || fail "scratchpad clipboard payload was not appended"
+rm -f -- "$scratch_file"
+ln -s -- "$WORK/target" "$scratch_file"
+if scratchpad_prepare >/dev/null 2>&1; then fail "scratchpad followed a symlink"; fi
+rm -f -- "$scratch_file"
+
+printf 'PASS: runtime ownership, file-operation guards, scratchpad and trash restore regressions\n'
