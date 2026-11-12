@@ -288,7 +288,7 @@ def main():
     input_flush_and_termios_test()
     with tempfile.TemporaryDirectory(prefix="omnish-pty-scratchpad-") as tmp:
         scratchpad_editor_tty_test(tmp)
-    print("PASS: PTY SIGWINCH redraw, queued escape cleanup and termios restoration")
+    print("PASS: PTY SIGWINCH redraw, queued escape cleanup, termios restoration and scratchpad editor TTY preservation")
 
 
 if __name__ == "__main__":

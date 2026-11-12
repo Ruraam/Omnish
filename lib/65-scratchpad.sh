@@ -72,6 +72,13 @@ scratchpad_open() {
     local selected_path="${1:-}" file action note
     file="$(scratchpad_prepare)" || return 1
     [[ "$selected_path" == "empty" ]] && selected_path=""
+    if [[ -n "$selected_path" && ! -e "$selected_path" && ! -L "$selected_path" ]]; then
+        if [[ -e "$PWD/$selected_path" || -L "$PWD/$selected_path" ]]; then
+            selected_path="$PWD/$selected_path"
+        else
+            selected_path=""
+        fi
+    fi
     while :; do
         printf '\033[2J\033[H'
         printf '\033[1;96m╭─ Omnish Scratchpad ─────────────────────────────────╮\033[0m\n'
