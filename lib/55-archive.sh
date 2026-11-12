@@ -172,7 +172,7 @@ _archive_size() {
 }
 quick_archive() {
     local -a sources=() formats=("tar.gz — compatible" "tar.zst — fast + compact" "zip — universal")
-    local source source_dir source_name bytes total=0 ratio=80 estimate ext base output format rc
+    local source source_dir source_name bytes total=0 ratio=80 estimate ext base output format rc archive_tmpdir archive_target
     local -a tar_args=()
     if (("${#marked_files[@]}")); then sources=("${marked_files[@]}")
     elif [[ -n "${1:-}" && ( -e "$1" || -L "$1" ) ]]; then sources=("$1"); fi
@@ -205,29 +205,46 @@ quick_archive() {
         source_name="${source##*/}"
         tar_args+=(-C "$source_dir" "./$source_name")
     done
-    if [[ -e "$output" ]]; then
+    if [[ -e "$output" || -L "$output" ]]; then
+        [[ ! -d "$output" ]] || { status_msg "output path is a directory"; return 1; }
         cmd_yes_no "Overwrite archive?"; [[ "$cmd_reply" == yes ]] || return 0
-        rm -f -- "$output" || { status_msg "cannot replace existing archive"; return 1; }
     fi
+
+    # Build beside the destination, then atomically replace it only after the
+    # complete archive has been created. A failed compression never destroys
+    # a previously existing archive.
+    archive_tmpdir="$(mktemp -d "${output%/*}/.omnish-archive.XXXXXX")" || {
+        status_msg "cannot create temporary archive directory"
+        return 1
+    }
+    archive_target="$archive_tmpdir/${output##*/}"
     if [[ "$ext" == tar.gz ]]; then
-        if tar -czf "$output" "${tar_args[@]}"; then rc=0; else rc=$?; fi
+        if tar -czf "$archive_target" "${tar_args[@]}"; then rc=0; else rc=$?; fi
     elif [[ "$ext" == tar.zst ]]; then
-        command -v zstd >/dev/null 2>&1 || { status_msg "install zstd"; return 1; }
-        if tar --zstd -cf "$output" "${tar_args[@]}"; then rc=0; else rc=$?; fi
+        if ! command -v zstd >/dev/null 2>&1; then
+            rm -rf -- "$archive_tmpdir"; status_msg "install zstd"; return 1
+        fi
+        if tar --zstd -cf "$archive_target" "${tar_args[@]}"; then rc=0; else rc=$?; fi
     else
-        command -v zip >/dev/null 2>&1 || { status_msg "install zip"; return 1; }
+        if ! command -v zip >/dev/null 2>&1; then
+            rm -rf -- "$archive_tmpdir"; status_msg "install zip"; return 1
+        fi
         rc=0
         for source in "${sources[@]}"; do
             source_dir="${source%/*}"; [[ "$source_dir" == "$source" ]] && source_dir="$PWD"
             [[ -n "$source_dir" ]] || source_dir=/
             source_name="${source##*/}"
-            (cd -- "$source_dir" && zip -qr "$output" "./$source_name") || { rc=$?; break; }
+            (cd -- "$source_dir" && zip -qr "$archive_target" "./$source_name") || { rc=$?; break; }
         done
     fi
-    if ((rc == 0)); then
+    if ((rc == 0)) && mv -f -- "$archive_target" "$output"; then
+        rm -rf -- "$archive_tmpdir"
         status_msg "created ${output##*/}; estimated $(_human_size "$estimate") (approx.)"
         marked_files=(); sync_marked_files
     else
-        [[ -f "$output" ]] && rm -f -- "$output"; status_msg "compression failed (rc=$rc)"; return "$rc"
+        rm -rf -- "$archive_tmpdir"
+        (( rc != 0 )) || rc=$?
+        status_msg "compression failed (rc=$rc)"
+        return "$rc"
     fi
 }
