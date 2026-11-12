@@ -3,9 +3,10 @@
 #
 # Usage:
 #   ./install.sh
-#   PREFIX=/usr/local ./install.sh
+#   PREFIX="$HOME/.local/opt/omnish" ./install.sh
 #
-# PREFIX defaults to $HOME/.local. No sudo is needed for a user install.
+# Installation is strictly user-scoped: PREFIX must resolve inside HOME.
+# Root execution and system-wide prefixes are intentionally rejected.
 
 set -Eeuo pipefail
 
@@ -31,16 +32,22 @@ ROOT="$(cd -P -- "$(dirname -- "$SELF")" >/dev/null 2>&1 && pwd -P)" \
 [[ -f "$ROOT/omnish" && -r "$ROOT/omnish" ]] || _die "source directory is missing readable omnish"
 
 : "${HOME:?HOME must be set}"
-PREFIX="${PREFIX:-$HOME/.local}"
-# Normalize trailing slashes before checking; then resolve symlinks before
-# creating bin/ or share/ so aliases of / cannot bypass the safety guard.
-while [[ "$PREFIX" == */ && "$PREFIX" != "/" ]]; do
-    PREFIX="${PREFIX%/}"
-done
-[[ -n "$PREFIX" && "$PREFIX" != "/" ]] || _die "refusing unsafe PREFIX='$PREFIX'"
+(( EUID != 0 )) || _die "refusing to install as root; run as your normal user without sudo"
+HOME_CANON="$(cd -P -- "$HOME" && pwd -P)" || _die "cannot resolve HOME"
+PREFIX="${PREFIX:-$HOME_CANON/.local}"
+[[ "$PREFIX" == /* ]] || _die "PREFIX must be an absolute path inside HOME"
+# Resolve non-existent components and symlinks before creating anything.
+PREFIX="$(realpath -m -- "$PREFIX" 2>/dev/null)" || _die "cannot resolve PREFIX"
+case "$PREFIX" in
+    "$HOME_CANON"/*) ;;
+    *) _die "PREFIX must stay inside HOME ($HOME_CANON); system-wide installs are not supported" ;;
+esac
 mkdir -p -- "$PREFIX" || _die "cannot create PREFIX: $PREFIX"
 PREFIX="$(cd -P -- "$PREFIX" && pwd -P)" || _die "cannot resolve PREFIX"
-[[ "$PREFIX" != "/" ]] || _die "refusing PREFIX resolving to /"
+case "$PREFIX" in
+    "$HOME_CANON"/*) ;;
+    *) _die "resolved PREFIX escaped HOME; refusing installation" ;;
+esac
 mkdir -p -- "$PREFIX/bin" "$PREFIX/share" || _die "cannot create PREFIX directories: $PREFIX"
 BIN="$PREFIX/bin"
 SHARE="$PREFIX/share/omnish"

@@ -8,12 +8,21 @@ trap 'rm -rf -- "$WORK"' EXIT
 
 SRC="$WORK/source tree"
 HOME_DIR="$WORK/home"
-PREFIX="$WORK/prefix with spaces"
+PREFIX="$HOME_DIR/prefix with spaces"
 mkdir -p -- "$SRC" "$HOME_DIR" "$SRC/lib"
 cp -- "$ROOT/install.sh" "$ROOT/omnish" "$SRC/"
 cp -R -- "$ROOT/lib/." "$SRC/lib/"
 
-# Fresh install must support paths containing spaces and create a working link.
+# System-wide/out-of-home prefixes must be rejected before creating anything.
+OUTSIDE_PREFIX="$WORK/outside-prefix"
+if HOME="$HOME_DIR" PREFIX="$OUTSIDE_PREFIX" "$SRC/install.sh" >"$WORK/outside.log" 2>&1; then
+    printf 'FAIL: installer accepted a PREFIX outside HOME\n' >&2
+    exit 1
+fi
+[[ ! -e "$OUTSIDE_PREFIX" ]] \
+    || { printf 'FAIL: rejected PREFIX was created outside HOME\n' >&2; exit 1; }
+
+# Fresh install must support paths containing spaces inside HOME and create a working link.
 HOME="$HOME_DIR" PREFIX="$PREFIX" "$SRC/install.sh"
 [[ -L "$PREFIX/bin/omnish" ]]
 [[ -x "$PREFIX/bin/omnish" ]]
