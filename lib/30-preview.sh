@@ -127,14 +127,14 @@ _preview_image() {
     # loop_draw_preview clips output line by line. Keep it strictly textual,
     # but use a richer glyph set than vhalf for substantially more detail.
     if [[ "$backend" == loop ]]; then
-        if chafa --format=symbols --symbols="$symbols" --colors=24bit \
+        if chafa --format=symbols --symbols="$symbols" --colors=full \
             --work="$work" --color-space="$color_space" \
             --color-extractor="$extractor" --size="${width}x${height}" \
             -- "$file" 2>/dev/null; then
             return 0
         fi
         # Older Chafa builds may not support every quality option/glyph class.
-        chafa --format=symbols --symbols=vhalf --colors=24bit \
+        chafa --format=symbols --symbols=vhalf --colors=full \
             --size="${width}x${height}" -- "$file" 2>/dev/null
         return $?
     fi
@@ -145,8 +145,10 @@ _preview_image() {
 
     # Graphical protocols are emitted directly by Chafa to fzf's preview
     # process. No Bash line clipping/folding touches these escape streams.
-    if [[ "$format" != symbols ]]; then
-        if chafa --format="$format" --work="$work" \
+    local chafa_format="$format"
+    [[ "$chafa_format" == sixel ]] && chafa_format=sixels
+    if [[ "$chafa_format" != symbols ]]; then
+        if chafa --format="$chafa_format" --work="$work" \
             --color-space="$color_space" --color-extractor="$extractor" \
             --size="${width}x${height}" -- "$file" 2>/dev/null; then
             return 0
@@ -212,8 +214,14 @@ _preview_file() {
                 # loop's line-oriented clipping path via _preview_image.
                 local img_h=$(( sizeline - 2 ))
                 (( img_h < 5 )) && img_h=5
-                _preview_image "$file" "$width" "$img_h" && return
+                if _preview_image "$file" "$width" "$img_h"; then
+                    return 0
+                fi
+                printf '(image preview unavailable: Chafa could not decode or render this file)\\n'
+            else
+                printf '(image preview unavailable: install Chafa)\\n'
             fi
+            return 0
             ;;
         pdf)
             if command -v pdftotext >/dev/null 2>&1; then

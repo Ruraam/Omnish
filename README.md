@@ -83,7 +83,7 @@ omnish                       # auto: fzf when available, otherwise loop
       <h3>◫ Live previews</h3>
       <ul>
         <li>Text and source files</li>
-        <li>Images through Chafa: passive Kitty, iTerm2 and Sixel detection; safe 24-bit half-block fallback</li>
+        <li>Images through Chafa: passive Kitty, iTerm2 and Sixel detection; safe truecolor half-block fallback</li>
         <li>PDF text through poppler-utils</li>
         <li>Markdown through glow or compatible tools</li>
         <li>Archives, JSON, symlinks and special files</li>
@@ -292,7 +292,7 @@ If `XDG_CONFIG_HOME` is not set, Omnish uses `~/.config/omnish/omnish.conf`.
 
 The file is Bash syntax and is sourced by Omnish. Only put trusted shell code in it.
 
-Chafa remains the only image renderer. In fzf mode, `auto` selects Kitty, iTerm2 or Sixel only from known environment hints (`KITTY_PID`, `TERM`, `TERM_PROGRAM`, `COLORTERM`); otherwise it uses symbols. No terminal capability query is sent. The loop backend always forces `--format=symbols --symbols=vhalf --colors=24bit`, because its preview pane clips text line by line and must not receive graphical control streams. Set `OMNISH_IMAGE_FORMAT` to override auto-detection (`auto`, `kitty`, `sixel`, `iterm`, `symbols`).
+Chafa remains the only image renderer. In fzf mode, `auto` selects Kitty, iTerm2 or Sixel only from known environment hints (`KITTY_PID`, `TERM`, `TERM_PROGRAM`, `COLORTERM`); otherwise it uses symbols. No terminal capability query is sent. The loop backend always forces `--format=symbols --symbols=vhalf --colors=full (truecolor)`, because its preview pane clips text line by line and must not receive graphical control streams. Set `OMNISH_IMAGE_FORMAT` to override auto-detection (`auto`, `kitty`, `sixel`, `iterm`, `symbols`).
 
 Example:
 
