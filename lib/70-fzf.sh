@@ -242,7 +242,7 @@ fzf_preview_width() {
 
     (( width < 1 )) && width=1
     (( width > max_preview )) && width=$max_preview
-    printf '%s\\n' "$width"
+    printf '%s\n' "$width"
 }
 
 fzf_binds() {
