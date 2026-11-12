@@ -64,6 +64,16 @@ export TERM=foot
 export TERM=xterm-256color
 [[ "$(_preview_detect_image_format)" == symbols ]] || fail "unknown terminal did not use safe symbols fallback"
 
+# Chafa names its 24-bit mode "full", not "24bit". Exercise the fzf
+# symbols path with a truecolor terminal so fallback rendering stays valid.
+: > "$CHAFA_ARGS_LOG"
+OMNISH_IMAGE_FORMAT=symbols
+OMNISH_PREVIEW_BACKEND=fzf
+COLORTERM=truecolor
+_preview_image "$WORK/fixture.png" 48 18 || fail "truecolor symbols preview failed"
+grep -Fq -- '--colors=full' "$CHAFA_ARGS_LOG" || fail "truecolor symbols preview did not use Chafa's full color mode"
+unset OMNISH_IMAGE_FORMAT COLORTERM OMNISH_PREVIEW_BACKEND
+
 # loop must remain textual, but use the high-detail Chafa glyph and color pipeline.
 : > "$CHAFA_ARGS_LOG"
 KITTY_PID=123
