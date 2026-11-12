@@ -32,12 +32,16 @@ ROOT="$(cd -P -- "$(dirname -- "$SELF")" >/dev/null 2>&1 && pwd -P)" \
 
 : "${HOME:?HOME must be set}"
 PREFIX="${PREFIX:-$HOME/.local}"
+# Normalize trailing slashes before checking; then resolve symlinks before
+# creating bin/ or share/ so aliases of / cannot bypass the safety guard.
+while [[ "$PREFIX" == */ && "$PREFIX" != "/" ]]; do
+    PREFIX="${PREFIX%/}"
+done
 [[ -n "$PREFIX" && "$PREFIX" != "/" ]] || _die "refusing unsafe PREFIX='$PREFIX'"
-
-# Create and canonicalize the prefix once; all transaction paths then share
-# one filesystem, allowing rename(2)-based activation and rollback.
-mkdir -p -- "$PREFIX/bin" "$PREFIX/share" || _die "cannot create PREFIX directories: $PREFIX"
+mkdir -p -- "$PREFIX" || _die "cannot create PREFIX: $PREFIX"
 PREFIX="$(cd -P -- "$PREFIX" && pwd -P)" || _die "cannot resolve PREFIX"
+[[ "$PREFIX" != "/" ]] || _die "refusing PREFIX resolving to /"
+mkdir -p -- "$PREFIX/bin" "$PREFIX/share" || _die "cannot create PREFIX directories: $PREFIX"
 BIN="$PREFIX/bin"
 SHARE="$PREFIX/share/omnish"
 
