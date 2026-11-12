@@ -287,6 +287,7 @@ fzf_binds() {
             --bind 'tab:toggle+down+execute-silent(bash "$OMNISH_ENTRYPOINT" --mark-file {})' \
             --bind 'shift-tab:toggle+up+execute-silent(bash "$OMNISH_ENTRYPOINT" --mark-file {})' \
             --bind 'space:toggle+execute-silent(bash "$OMNISH_ENTRYPOINT" --mark-file {})' \
+            --bind 'z,shift-z:execute(bash "$OMNISH_ENTRYPOINT" --archive-create)+top+accept' \
             --bind 'right:accept' \
             --bind 'enter:accept' \
             --bind 'left:top+up+accept' \
@@ -435,7 +436,11 @@ fzf_main() {
         fi
 
         if [[ -f "$PWD/$sel" && ( "$key" == "enter" || "$key" == "right" ) ]]; then
-            handle_selected "$PWD/$sel"
+            if declare -F archive_is_supported >/dev/null 2>&1 && archive_is_supported "$PWD/$sel"; then
+                archive_browse "$PWD/$sel"
+            else
+                handle_selected "$PWD/$sel"
+            fi
         fi
     done
 }

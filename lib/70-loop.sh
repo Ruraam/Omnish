@@ -338,6 +338,7 @@ loop_handle_key() {
         l|RIGHT|'')  loop_open_selected ;;
         h|LEFT|$'\177'|BACKSPACE) loop_go_parent ;;
         e|F5)    loop_draw full ;;
+        z|Z)     loop_with_terminal "quick_archive" ;;
 
         q|ESC)   loop_quit ;;
 
@@ -442,7 +443,15 @@ loop_open_selected() {
     if [[ -d "$entry" ]]; then
         loop_cd "$entry"
     elif [[ -f "$entry" ]]; then
-        loop_open_external
+        if declare -F archive_is_supported >/dev/null 2>&1 && archive_is_supported "$entry"; then
+            loop_reset_terminal
+            archive_browse "$entry"
+            loop_setup_terminal
+            loop_show_help=0
+            loop_draw full
+        else
+            loop_open_external
+        fi
     fi
 }
 

@@ -500,4 +500,85 @@ ln -s -- "$WORK/target" "$scratch_file"
 if scratchpad_prepare >/dev/null 2>&1; then fail "scratchpad followed a symlink"; fi
 rm -f -- "$scratch_file"
 
+# Quick Archive format detection and read-only index support.
+source "$ROOT/lib/55-archive.sh"
+archive_fixture="$WORK/archive-fixture"
+mkdir -p -- "$archive_fixture/nested"
+printf 'archive payload\n' > "$archive_fixture/nested/file with spaces.txt"
+archive_file="$WORK/quick-archive-fixture.tar.gz"
+tar -czf "$archive_file" -C "$archive_fixture" .
+archive_is_supported "$archive_file" || fail "tar.gz was not detected as an archive"
+# libarchive-backed formats are enabled only when bsdtar can read the file.
+mkdir -p -- "$WORK/bsdtar-bin"
+cat > "$WORK/bsdtar-bin/bsdtar" <<'EOF_BSDTAR'
+#!/usr/bin/env bash
+case "$1" in
+    -tf) printf '%s\n' 'folder/' 'folder/readme.txt' ;;
+    -xOf) [[ "$3" == folder/readme.txt ]] || exit 2; printf 'libarchive payload\n' ;;
+    *) exit 2 ;;
+esac
+EOF_BSDTAR
+chmod +x "$WORK/bsdtar-bin/bsdtar"
+PATH="$WORK/bsdtar-bin:$PATH"
+libarchive_fixture="$WORK/sample.7z"
+printf 'mock 7z container' > "$libarchive_fixture"
+archive_is_supported "$libarchive_fixture" || fail "7z extension was not recognized"
+[[ "$(_archive_kind "$libarchive_fixture")" == libarchive ]] || fail "bsdtar-backed 7z format was not detected"
+[[ "$(_archive_list_to "$libarchive_fixture")" == *"folder/readme.txt"* ]] || fail "bsdtar listing omitted a member"
+[[ "$(_archive_stream_member "$libarchive_fixture" "folder/readme.txt")" == "libarchive payload" ]] || fail "bsdtar member streaming failed"
+for ext in rar iso cab ar; do
+    archive_is_supported "$WORK/sample.$ext" || fail "$ext extension was not recognized"
+done
+archive_is_supported "$WORK/future.lpk" || fail "future .lpk extension was not recognized"
+if archive_is_supported "$WORK/not-an-archive.txt"; then fail "plain text file was classified as an archive"; fi
+archive_index="$(_archive_list_to "$archive_file")"
+[[ "$archive_index" == *"nested/file with spaces.txt"* ]] || fail "tar archive index omitted nested member"
+[[ "$(_archive_stream_member "$archive_file" "./nested/file with spaces.txt")" == "archive payload" ]] || fail "archive member streaming failed for ./ paths"
+cp -- "$archive_file" "$WORK/future.lpk"
+[[ "$(_archive_kind "$WORK/future.lpk")" == tar ]] || fail "tar-backed .lpk detection failed"
+# ULPM-native LPK is a zstd SquashFS payload with an optional ULPM_SIG footer.
+mkdir -p -- "$WORK/lpk-bin"
+cat > "$WORK/lpk-bin/unsquashfs" <<'EOF_UNSQUASHFS'
+#!/usr/bin/env bash
+mode="$1"; shift
+image="$1"; shift
+[[ "$(head -c 4 -- "$image")" == hsqs ]] || exit 21
+case "$mode" in
+    -s)
+        [[ "$(tail -c 8 -- "$image")" != ULPM_SIG ]]
+        ;;
+    -lln)
+        [[ "$(tail -c 8 -- "$image")" != ULPM_SIG ]] || exit 22
+        printf '%s\n' \
+            'drwxr-xr-x 0/0 0 1970-01-01 00:00 ./' \
+            'drwxr-xr-x 0/0 0 1970-01-01 00:00 ./meta' \
+            '-rw-r--r-- 0/0 42 1970-01-01 00:00 ./meta/manifest.json'
+        ;;
+    -cat)
+        [[ "$(tail -c 8 -- "$image")" != ULPM_SIG ]] || exit 23
+        [[ "$1" == meta/manifest.json ]] || exit 24
+        printf '{"format_version":5,"id":"io.example.fixture","name":"fixture"}\n'
+        ;;
+    *) exit 25 ;;
+esac
+EOF_UNSQUASHFS
+chmod +x "$WORK/lpk-bin/unsquashfs"
+PATH="$WORK/lpk-bin:$PATH"
+ulpm_lpk="$WORK/ulpm-native.lpk"
+printf 'hsqsFAKE-SQUASHFS-PAYLOAD' > "$ulpm_lpk"
+printf 'ULPM_SIG' >> "$ulpm_lpk"
+dd if=/dev/zero bs=96 count=1 status=none >> "$ulpm_lpk"
+cp -- "$ulpm_lpk" "$WORK/ulpm-native.before"
+[[ "$(_archive_kind "$ulpm_lpk")" == lpk ]] || fail "native ULPM SquashFS LPK was not detected"
+ulpm_index="$(_archive_list_to "$ulpm_lpk")"
+[[ "$ulpm_index" == *"meta/manifest.json"* ]] || fail "ULPM LPK listing omitted manifest"
+[[ "$(_archive_stream_member "$ulpm_lpk" "meta/manifest.json")" == *'"format_version":5'* ]] || fail "ULPM LPK manifest streaming failed"
+cmp -s -- "$ulpm_lpk" "$WORK/ulpm-native.before" || fail "read-only LPK browsing modified the package"
+_omnish_select() { printf '%s\n' 'tar.gz — compatible'; }
+cmd_line() { cmd_reply="$WORK/created-quick-archive"; }
+marked_files=("$archive_fixture/nested/file with spaces.txt")
+quick_archive
+[[ -f "$WORK/created-quick-archive.tar.gz" ]] || fail "Quick Archive did not create tar.gz output"
+tar -tzf "$WORK/created-quick-archive.tar.gz" | grep -Fxq "./file with spaces.txt" || fail "Quick Archive did not store a clean relative member path"
+
 printf 'PASS: runtime ownership, file-operation guards, scratchpad and trash restore regressions\n'
