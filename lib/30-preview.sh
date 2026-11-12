@@ -94,7 +94,7 @@ _preview_image() {
 
     case "$quality" in
         high)
-            colors=24bit
+            colors=full
             work=9
             color_space=din99d
             extractor=median
@@ -116,7 +116,7 @@ _preview_image() {
             ;;
         *)
             quality=high
-            colors=24bit
+            colors=full
             work=9
             color_space=din99d
             extractor=median
@@ -219,7 +219,7 @@ _preview_file() {
                 fi
                 printf '(image preview unavailable: Chafa could not decode or render this file)\n'
             else
-                printf '(image preview unavailable: install Chafa)\\n'
+                printf '(image preview unavailable: install Chafa)\n'
             fi
             return 0
             ;;
