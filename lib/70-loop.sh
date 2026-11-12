@@ -18,13 +18,22 @@
 # Terminal state
 # ===============================================================
 loop_setup_terminal() {
+    # Capture the exact state once. External tools may temporarily use the
+    # terminal, but every return to the loop must preserve this original state.
+    if [[ -z "${OMNISH_TTY_SAVED_STTY:-}" ]]; then
+        OMNISH_TTY_SAVED_STTY=$(stty -g </dev/tty 2>/dev/null) || return 1
+    fi
     printf '\e[?1049h\e[?7l\e[?25l\e[2J'
     stty -echo -icanon min 1 time 0 </dev/tty 2>/dev/null
 }
 
 loop_reset_terminal() {
     printf '\e[?7h\e[?25h\e[2J\e[;r\e[?1049l'
-    stty sane </dev/tty 2>/dev/null
+    if [[ -n "${OMNISH_TTY_SAVED_STTY:-}" ]]; then
+        stty "${OMNISH_TTY_SAVED_STTY}" </dev/tty 2>/dev/null
+    else
+        stty sane </dev/tty 2>/dev/null
+    fi
 }
 
 loop_clear_scroll() {
@@ -765,6 +774,15 @@ loop_main() {
 
     # [FIX 9] load persisted marks from disk before first draw
     loop_reload_marks_from_disk
+
+    # Save the caller's exact termios state before entering raw mode. Keep it
+    # in shell scope so both the EXIT trap and cleanup() can restore it.
+    unset OMNISH_TTY_SAVED_STTY
+    OMNISH_TTY_SAVED_STTY=$(stty -g </dev/tty 2>/dev/null) || {
+        printf 'omnish: unable to read terminal settings\n' >/dev/tty 2>/dev/null
+        exec {OMNISH_TTY_FD}>&-
+        exit 1
+    }
 
     # [FIX 1] INT/TERM must exit; EXIT fires on natural exit
     loop_resize_pending=0
