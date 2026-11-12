@@ -5,7 +5,7 @@ set -Eeuo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 ULPM_SOURCE_DIR="${1:-$ROOT/../ulpm}"
-[[ -x "$ULPM_SOURCE_DIR/bin/ulpm" && -d "$ULPM_SOURCE_DIR/lib" ]] || {
+[[ -f "$ULPM_SOURCE_DIR/bin/ulpm" && -d "$ULPM_SOURCE_DIR/lib" ]] || {
     printf 'ULPM source tree not found: %s\n' "$ULPM_SOURCE_DIR" >&2
     exit 2
 }
@@ -56,7 +56,7 @@ chmod 0755 "$STAGE/bin/demo"
 
 # Use ULPM's actual pack/sign implementation; this creates a real zstd
 # SquashFS image and the 104-byte Ed25519 ULPM_SIG trailer.
-"$ULPM_SOURCE_DIR/bin/ulpm" pack --no-scan "$STAGE" omnish-integration "$LPK" 1.2.3
+bash "$ULPM_SOURCE_DIR/bin/ulpm" pack --no-scan "$STAGE" omnish-integration "$LPK" 1.2.3
 [[ -s "$LPK" ]] || { echo "ULPM did not create the LPK fixture" >&2; exit 1; }
 [[ "$(head -c 4 -- "$LPK")" == hsqs ]] || { echo "LPK is not a SquashFS image" >&2; exit 1; }
 [[ "$(tail -c 104 -- "$LPK" | head -c 8)" == ULPM_SIG ]] || {
