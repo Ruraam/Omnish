@@ -265,6 +265,31 @@ printf 'hidden\n' > "$WORK/loop-list/.hidden-file"
 )
 
 
+# Responsive layout policy: both backends hide the side preview below 90 columns
+# or below 10 rows, preserving the full-width file list on compact terminals.
+get_term_size() { LINES=$TEST_LINES; COLUMNS=$TEST_COLUMNS; }
+loop_print_line() { :; }
+loop_draw_preview() { :; }
+loop_status_line() { :; }
+loop_hide_cursor() { :; }
+loop_clear_scroll() { :; }
+loop_total=0
+loop_scroll=0
+loop_list=("fixture")
+TEST_LINES=24
+TEST_COLUMNS=80
+loop_draw
+[[ "$loop_preview_visible" -eq 0 && "$loop_list_width" -eq 78 ]] || fail "loop narrow layout did not use the full list width"
+TEST_LINES=24
+TEST_COLUMNS=120
+loop_draw
+[[ "$loop_preview_visible" -eq 1 && "$loop_list_width" -eq 52 && "$loop_preview_width" -eq 64 ]] || fail "loop wide layout did not allocate list and preview panes"
+TEST_LINES=8
+TEST_COLUMNS=120
+loop_draw
+[[ "$loop_preview_visible" -eq 0 ]] || fail "loop short layout did not hide the preview pane"
+grep -Fq 'COLUMNS < 90 || LINES < 10' "$ROOT/lib/70-fzf.sh" || fail "fzf compact-terminal preview breakpoint is missing"
+
 # Tab, Space and Shift-Tab must mutate the same persistent mark set.
 mkdir -p -- "$WORK/loop-select"
 printf "one\n" > "$WORK/loop-select/one.txt"
