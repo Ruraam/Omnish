@@ -62,7 +62,9 @@ scratchpad_edit() {
     local -a editor_cmd=()
     read -r -a editor_cmd <<< "$editor_line"
     (("${#editor_cmd[@]}")) || editor_cmd=(vi)
-    "${editor_cmd[@]}" -- "$file" || rc=$?
+    # fzf execute may not preserve the child process standard input.
+    # Attach full-screen editors to the controlling terminal explicitly.
+    "${editor_cmd[@]}" -- "$file" </dev/tty >/dev/tty 2>&1 || rc=$?
     [[ -n "$saved_tty" ]] && stty "$saved_tty" </dev/tty 2>/dev/null || :
     chmod 600 -- "$file" 2>/dev/null || :
     return "$rc"
