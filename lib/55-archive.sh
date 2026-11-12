@@ -105,7 +105,10 @@ quick_archive() {
         total=$((total + bytes))
     done
     format=$(_omnish_select "Quick Archive — ${#sources[@]} item(s), source $(_human_size "$total")" < <(printf '%s\n' "${formats[@]}")) || return 0
-    case "$format" in tar.gz*) ext=tar.gz; ratio=75 ;; tar.zst*) ext=tar.zst; ratio=70 ;; zip*) ext=zip; ratio=85 ;; *) return 1 ;; esac
+    if [[ "$format" == tar.gz* ]]; then ext=tar.gz; ratio=75
+    elif [[ "$format" == tar.zst* ]]; then ext=tar.zst; ratio=70
+    elif [[ "$format" == zip* ]]; then ext=zip; ratio=85
+    else return 1; fi
     estimate=$((total * ratio / 100)
     base="${sources[0]##*/}"; base="${base%.*}"; [[ -n "$base" ]] || base=archive
     output="$PWD/$base.$ext"; cmd_reply="$output"
@@ -114,11 +117,15 @@ quick_archive() {
     [[ "$output" == *".$ext" ]] || output="$output.$ext"
     for source in "${sources[@]}"; do [[ "$output" == "$source" ]] && { status_msg "output cannot replace source"; return 1; }; done
     if [[ -e "$output" ]]; then cmd_yes_no "Overwrite '${output##*/}'?"; [[ "$cmd_reply" == yes ]] || return 0; fi
-    case "$ext" in
-        tar.gz) tar -czf "$output" -- "${sources[@]}" ;;
-        tar.zst) command -v zstd >/dev/null 2>&1 || { status_msg "install zstd"; return 1; }; tar --zstd -cf "$output" -- "${sources[@]}" ;;
-        zip) command -v zip >/dev/null 2>&1 || { status_msg "install zip"; return 1; }; zip -qr "$output" -- "${sources[@]}" ;;
-    esac
+    if [[ "$ext" == tar.gz ]]; then
+        tar -czf "$output" -- "${sources[@]}"
+    elif [[ "$ext" == tar.zst ]]; then
+        command -v zstd >/dev/null 2>&1 || { status_msg "install zstd"; return 1; }
+        tar --zstd -cf "$output" -- "${sources[@]}"
+    else
+        command -v zip >/dev/null 2>&1 || { status_msg "install zip"; return 1; }
+        zip -qr "$output" -- "${sources[@]}"
+    fi
     rc=$?
     if ((rc == 0)); then
         status_msg "created ${output##*/}; estimated $(_human_size "$estimate") (approx.)"
