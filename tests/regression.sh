@@ -290,9 +290,9 @@ TEST_COLUMNS=120
 loop_draw
 [[ "$loop_preview_visible" -eq 1 && "$loop_list_width" -eq 46 && "$loop_preview_width" -eq 70 ]] || fail "loop wide landscape layout did not allocate 40/60 panes"
 TEST_LINES=100
-TEST_COLUMNS=50
+TEST_COLUMNS=80
 loop_draw
-[[ "$loop_preview_visible" -eq 1 && "$loop_list_width" -eq 23 && "$loop_preview_width" -eq 23 ]] || fail "loop portrait layout did not preserve the 50/50 split"
+[[ "$loop_preview_visible" -eq 1 && "$loop_list_width" -eq 38 && "$loop_preview_width" -eq 38 ]] || fail "loop portrait layout did not preserve the 50/50 split"
 TEST_LINES=8
 TEST_COLUMNS=120
 loop_draw
