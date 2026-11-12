@@ -101,10 +101,15 @@ _archive_size() {
 }
 quick_archive() {
     local -a sources=() formats=("tar.gz — compatible" "tar.zst — fast + compact" "zip — universal")
-    local source bytes total=0 ratio=80 estimate ext base output format rc
+    local source source_dir source_name bytes total=0 ratio=80 estimate ext base output format rc
+    local -a tar_args=()
     if (("${#marked_files[@]}")); then sources=("${marked_files[@]}")
     elif [[ -n "${1:-}" && ( -e "$1" || -L "$1" ) ]]; then sources=("$1"); fi
     (("${#sources[@]}")) || { status_msg "mark files first, then press Z"; return 1; }
+    if declare -F _fileops_has_duplicate_basenames >/dev/null 2>&1 && _fileops_has_duplicate_basenames "${sources[@]}"; then
+        status_msg "duplicate basenames in selection; archive separately"
+        return 1
+    fi
     for source in "${sources[@]}"; do
         [[ -e "$source" || -L "$source" ]] || { status_msg "missing source"; return 1; }
         bytes=$(_archive_size "$source"); [[ "$bytes" =~ ^[0-9]+$ ]] || bytes=0
