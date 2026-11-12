@@ -32,7 +32,7 @@ NAVIGATION
   F1 / ?           This help              Esc/^Q/^C   Quit (loop: q|Esc)
   F2                Open Scratchpad (fzf also supports Ctrl+Space)
   Z                 Quick Archive: compress marked items (tar.gz / tar.zst / zip)
-  Enter on archive  Browse TAR/ZIP/DEB/APK and ULPM SquashFS LPK read-only
+  Enter on archive  Browse TAR/ZIP/DEB/APK/LPK; RAR/7z/ISO/CAB/AR via bsdtar
   ^P               Toggle preview
   alt-h            Toggle hidden files    (loop: . also works)
   alt-l            Toggle long listing
