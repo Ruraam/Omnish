@@ -31,6 +31,8 @@ NAVIGATION
   g / G            Top / bottom           F5 / ^R     Refresh listing
   F1 / ?           This help              Esc/^Q/^C   Quit (loop: q|Esc)
   F2                Open Scratchpad (fzf also supports Ctrl+Space)
+  Z                 Quick Archive: compress marked items (tar.gz / tar.zst / zip)
+  Enter on archive  Browse virtually in read-only mode; no extraction
   ^P               Toggle preview
   alt-h            Toggle hidden files    (loop: . also works)
   alt-l            Toggle long listing
