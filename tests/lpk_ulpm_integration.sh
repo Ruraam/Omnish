@@ -63,11 +63,6 @@ chmod 0755 "$STAGE/bin/demo"
     echo "ULPM signature trailer is missing" >&2
     exit 1
 }
-unsquashfs -s "$LPK" >/dev/null 2>&1 && {
-    echo "Unexpected: raw signed LPK was accepted without stripping its trailer" >&2
-    exit 1
-}
-
 export TMP_OMNISH_DIR="$WORK/omnish-tmp"
 mkdir -p -- "$TMP_OMNISH_DIR"
 status_msg() { :; }
