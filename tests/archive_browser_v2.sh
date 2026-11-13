@@ -23,6 +23,10 @@ metadata="$(_archive_file_metadata "$member" "Fixture metadata")"
 grep -Fq 'Fixture metadata' <<<"$metadata"
 grep -Fq 'MIME:' <<<"$metadata"
 grep -Fq 'SHA-256:' <<<"$metadata"
+preview_seen=''
+_preview_file() { preview_seen="$1"; [[ "$1" == *.TXT ]]; }
+_archive_preview_staged_file "$member" "docs/ReleaseNotes.TXT"
+[[ "$preview_seen" == *.TXT && -L "$preview_seen" || "$preview_seen" == *.TXT ]]
 before="$(sha256sum "$WORK/fixture.tar")"
 _archive_file_metadata "$WORK/fixture.tar" "Archive metadata" >/dev/null
 after="$(sha256sum "$WORK/fixture.tar")"
