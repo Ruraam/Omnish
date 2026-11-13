@@ -33,6 +33,7 @@ NAVIGATION
   F2                Open Scratchpad (fzf also supports Ctrl+Space)
   Z                 Quick Archive: compress marked items (tar.gz / tar.zst / zip)
   Enter on archive  Browse TAR/ZIP/DEB/APK/LPK; RAR/7z/ISO/CAB/AR via bsdtar
+                      Search members, preview files, inspect metadata, open nested archives
   ^P               Toggle preview
   alt-h            Toggle hidden files    (loop: . also works)
   alt-l            Toggle long listing
