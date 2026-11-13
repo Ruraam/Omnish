@@ -215,6 +215,23 @@ _archive_file_metadata() {
     fi
 }
 
+_archive_preview_staged_file() {
+    local file="$1" member="$2" ext preview_path rc
+    ext="\${member##*.}"
+    [[ "$ext" != "$member" && "$ext" =~ ^[A-Za-z0-9]{1,12}$ ]] || ext=bin
+    preview_path="$file.preview.$ext"
+    ln -s -- "$file" "$preview_path" || return 1
+    if declare -F _preview_file >/dev/null 2>&1; then
+        _preview_file "$preview_path"; rc=$?
+    elif command -v less >/dev/null 2>&1; then
+        less -R "$preview_path"; rc=$?
+    else
+        head -n 200 -- "$preview_path"; rc=$?
+    fi
+    rm -f -- "$preview_path"
+    return "$rc"
+}
+
 _archive_show_member_metadata() {
     local archive="$1" member="$2" tmpdir="${TMP_OMNISH_DIR:-${TMPDIR:-/tmp}}" tmp
     mkdir -p -- "$tmpdir" || return 1
@@ -319,9 +336,7 @@ archive_browse() {
                     break ;;
                 "[PREVIEW] Preview member")
                     if [[ -n "$nested_tmp" && -s "$nested_tmp" ]]; then
-                        if declare -F _preview_file >/dev/null 2>&1; then _preview_file "$nested_tmp"
-                        elif command -v less >/dev/null 2>&1; then less -R "$nested_tmp"
-                        else head -n 200 -- "$nested_tmp"; fi
+                        _archive_preview_staged_file "$nested_tmp" "$member_path"
                     else
                         status_msg "preview unavailable: member exceeds configured streaming limits"
                     fi
