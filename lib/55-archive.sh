@@ -196,11 +196,63 @@ _archive_nested_member_to_file() {
     return 0
 }
 
-# Archive contents are never extracted. Only selected regular files are streamed.
+_archive_member_matches_search() {
+    local member="${1,,}" query="${2,,}"
+    [[ -z "$query" || "$member" == *"$query"* ]]
+}
+
+_archive_file_metadata() {
+    local path="$1" label="${2:-File}" size mode modified mime digest
+    [[ -f "$path" && -r "$path" ]] || return 1
+    size="$(stat -c '%s' -- "$path" 2>/dev/null || stat -f '%z' -- "$path" 2>/dev/null)" || return 1
+    mode="$(stat -c '%A (%a)' -- "$path" 2>/dev/null || stat -f '%Sp' -- "$path" 2>/dev/null)" || mode=unknown
+    modified="$(stat -c '%y' -- "$path" 2>/dev/null || stat -f '%Sm' -- "$path" 2>/dev/null)" || modified=unknown
+    mime="$(file -b --mime-type -- "$path" 2>/dev/null)" || mime=unknown
+    printf '%s\n  Name:        %s\n  Size:        %s bytes (%s)\n  MIME:        %s\n  Permissions: %s\n  Modified:    %s\n' "$label" "${path##*/}" "$size" "$(_human_size "$size")" "$mime" "$mode" "$modified"
+    if command -v sha256sum >/dev/null 2>&1; then
+        digest="$(sha256sum -- "$path" 2>/dev/null)" || digest=''
+        [[ -z "$digest" ]] || printf '  SHA-256:     %s\n' "${digest%% *}"
+    fi
+}
+
+_archive_preview_staged_file() {
+    local file="$1" member="$2" ext preview_path rc
+    ext="${member##*.}"
+    [[ "$ext" != "$member" && "$ext" =~ ^[A-Za-z0-9]{1,12}$ ]] || ext=bin
+    preview_path="$file.preview.$ext"
+    ln -s -- "$file" "$preview_path" || return 1
+    if declare -F _preview_file >/dev/null 2>&1; then
+        _preview_file "$preview_path"; rc=$?
+    elif command -v less >/dev/null 2>&1; then
+        less -R "$preview_path"; rc=$?
+    else
+        head -n 200 -- "$preview_path"; rc=$?
+    fi
+    rm -f -- "$preview_path"
+    return "$rc"
+}
+
+_archive_show_member_metadata() {
+    local archive="$1" member="$2" tmpdir="${TMP_OMNISH_DIR:-${TMPDIR:-/tmp}}" tmp
+    mkdir -p -- "$tmpdir" || return 1
+    tmp="$(mktemp "$tmpdir/omnish-archive-info.XXXXXX")" || return 1
+    if ! _archive_nested_member_to_file "$archive" "$member" "$tmp"; then
+        rm -f -- "$tmp"
+        status_msg "member metadata unavailable (streaming limit exceeded)"
+        return 1
+    fi
+    printf 'Archive: %s\nMember:  %s\n\n' "${archive##*/}" "$member"
+    _archive_file_metadata "$tmp" "Member metadata"
+    rm -f -- "$tmp"
+}
+
+# Archive contents are never extracted. Search and inspection use the virtual
+# member index or a single bounded temporary file, never a directory extraction.
 archive_browse() {
-    local archive="$1" depth="${2:-0}" seen="${3:-}" index="$TMP_OMNISH_DIR/archive-index.$"
-    local prefix='' selected rel child entry parent kind idx i member_path nested_tmp nested_kind nested_hash nested_choice
-    local -a members=() options=() paths=()
+    local archive="$1" depth="${2:-0}" seen="${3:-}" index="$TMP_OMNISH_DIR/archive-index.$$"
+    local prefix='' selected rel child entry parent kind idx i member_path nested_tmp nested_kind nested_hash
+    local action search_query='' member_action
+    local -a members=() options=() paths=() actions=()
     local max_depth="${OMNISH_NESTED_ARCHIVE_MAX_DEPTH:-4}"
     [[ "$depth" =~ ^[0-9]+$ && "$max_depth" =~ ^[0-9]+$ ]] || return 2
     if [[ -z "$seen" ]] && command -v sha256sum >/dev/null 2>&1; then
@@ -208,75 +260,97 @@ archive_browse() {
         [[ "$nested_hash" =~ ^[a-fA-F0-9]{64}$ ]] && seen="|$nested_hash|"
     fi
     [[ -f "$archive" ]] || { status_msg "archive not found"; return 1; }
-    kind=$(_archive_kind "$archive")
+    kind="$(_archive_kind "$archive")"
     [[ "$kind" != unknown ]] || { status_msg "unsupported archive"; return 1; }
     [[ "$kind" != lpk ]] || status_msg "ULPM LPK read-only view; embedded signature is not verified"
     _archive_list_to "$archive" > "$index" || { rm -f -- "$index"; status_msg "cannot read archive"; return 1; }
     mapfile -t members < "$index"; rm -f -- "$index"
+
     while :; do
-        options=(); paths=()
-        [[ -n "$prefix" ]] && { options+=(".."); paths+=(".."); }
-        local -A seen=()
+        options=(); paths=(); actions=()
+        options+=("[SEARCH] Filter members…"); paths+=(""); actions+=("search")
+        [[ -n "$search_query" ]] && { options+=("[CLEAR SEARCH]"); paths+=(""); actions+=("clear"); }
+        options+=("[ARCHIVE INFO] Metadata"); paths+=(""); actions+=("archive-info")
+        [[ -n "$prefix" ]] && { options+=(".."); paths+=(".."); actions+=("parent"); }
+        local -A seen_dirs=()
         for rel in "${members[@]}"; do
             rel="${rel#./}"
             _archive_member_is_safe "$rel" || continue
             [[ "$rel" == "$prefix"* ]] || continue
+            _archive_member_matches_search "$rel" "$search_query" || continue
             child="${rel#"$prefix"}"; [[ -n "$child" ]] || continue
             if [[ "$child" == */* ]]; then
-                entry="${child%%/*}/"; [[ -n "${seen[$entry]:-}" ]] && continue
-                seen["$entry"]=1; options+=("[DIR] $entry"); paths+=("$prefix$entry")
+                entry="${child%%/*}/"
+                [[ -n "${seen_dirs[$entry]:-}" ]] && continue
+                seen_dirs["$entry"]=1
+                options+=("[DIR] $entry"); paths+=("$prefix$entry"); actions+=("directory")
             elif [[ "$child" == */ ]]; then
-                entry="$child"; [[ -n "${seen[$entry]:-}" ]] && continue
-                seen["$entry"]=1; options+=("[DIR] $entry"); paths+=("$prefix$entry")
+                entry="$child"
+                [[ -n "${seen_dirs[$entry]:-}" ]] && continue
+                seen_dirs["$entry"]=1
+                options+=("[DIR] $entry"); paths+=("$prefix$entry"); actions+=("directory")
             else
-                options+=("$child"); paths+=("$prefix$child")
+                options+=("$child"); paths+=("$prefix$child"); actions+=("member")
             fi
         done
-        (("${#options[@]}" > 0)) || { status_msg "empty archive directory"; return 0; }
-        selected=$(_omnish_select "Quick Archive — ${archive##*/} — /${prefix}" < <(printf '%s\n' "${options[@]}")) || return 0
+        selected="$(_omnish_select "Quick Archive — ${archive##*/} — /${prefix}${search_query:+ — search: $search_query}" < <(printf '%s\n' "${options[@]}"))" || return 0
         idx=-1
         for i in "${!options[@]}"; do [[ "${options[i]}" == "$selected" ]] && { idx=$i; break; }; done
-        ((idx >= 0)) || return 0
-        rel="${paths[idx]}"
-        if [[ "$rel" == ".." ]]; then
-            parent="${prefix%/}"
-            if [[ "$parent" == */* ]]; then prefix="${parent%/*}/"; else prefix=''; fi
-        elif [[ "$selected" == "[DIR] "* ]]; then
-            prefix="$rel"
+        (( idx >= 0 )) || return 0
+        rel="${paths[idx]}"; action="${actions[idx]}"
+        case "$action" in
+            search) cmd_reply="$search_query"; cmd_line "Filter members (empty clears): "; search_query="$cmd_reply"; continue ;;
+            clear) search_query=''; continue ;;
+            archive-info)
+                if command -v less >/dev/null 2>&1; then _archive_file_metadata "$archive" "Archive metadata" | less -R
+                else _archive_file_metadata "$archive" "Archive metadata"; read -rsn 1 -p "Press any key…" </dev/tty 2>/dev/null || :; fi
+                continue ;;
+            parent)
+                parent="${prefix%/}"
+                if [[ "$parent" == */* ]]; then prefix="${parent%/*}/"; else prefix=''; fi
+                continue ;;
+            directory) prefix="$rel"; continue ;;
+            member) ;;
+            *) continue ;;
+        esac
+
+        member_path="$rel"
+        for entry in "${members[@]}"; do [[ "${entry#./}" == "$rel" ]] && { member_path="$entry"; break; }; done
+        nested_kind=unknown; nested_tmp=''
+        nested_tmp="$(mktemp "${TMP_OMNISH_DIR:-${TMPDIR:-/tmp}}/omnish-member.XXXXXX")" || nested_tmp=''
+        if [[ -n "$nested_tmp" ]] && _archive_nested_member_to_file "$archive" "$member_path" "$nested_tmp"; then
+            if (( depth < max_depth )) && command -v sha256sum >/dev/null 2>&1; then nested_kind="$(_archive_kind "$nested_tmp")"; fi
         else
-            member_path="$rel"
-            for entry in "${members[@]}"; do
-                [[ "${entry#./}" == "$rel" ]] && { member_path="$entry"; break; }
-            done
-            nested_kind=unknown
-            if (( depth < max_depth )) && command -v sha256sum >/dev/null 2>&1; then
-                nested_tmp="$(mktemp "${TMP_OMNISH_DIR:-${TMPDIR:-/tmp}}/omnish-nested.XXXXXX")" || nested_tmp=''
-                if [[ -n "$nested_tmp" ]] && _archive_nested_member_to_file "$archive" "$member_path" "$nested_tmp"; then
-                    nested_kind="$(_archive_kind "$nested_tmp")"
-                fi
-                if [[ "$nested_kind" != unknown ]]; then
-                    nested_hash="$(sha256sum -- "$nested_tmp" 2>/dev/null)"; nested_hash="${nested_hash%% *}"
-                    if [[ "$nested_hash" =~ ^[a-fA-F0-9]{64}$ ]] && [[ "$seen" != *"|$nested_hash|"* ]]; then
-                        nested_choice="$(_omnish_select "Nested archive detected" < <(printf '%s\\n' "Open nested archive" "Preview as file" "Cancel"))" || nested_choice=Cancel
-                        if [[ "$nested_choice" == "Open nested archive" ]]; then
-                            archive_browse "$nested_tmp" "$((depth + 1))" "${seen}${nested_hash}|"
-                            rm -f -- "$nested_tmp"
-                            continue
-                        fi
-                    else
-                        status_msg "nested archive cycle detected"
-                    fi
-                fi
-                [[ -z "$nested_tmp" ]] || rm -f -- "$nested_tmp"
-            fi
-            if command -v less >/dev/null 2>&1; then
-                _archive_stream_member "$archive" "$member_path" 2>/dev/null | less -R
-            else
-                _archive_stream_member "$archive" "$member_path" 2>/dev/null | head -n 200
-                printf '\\n[preview limited to 200 lines]\\n'
-                read -rsn 1 -p "Press any key…" </dev/tty 2>/dev/null || :
-            fi
+            [[ -z "$nested_tmp" ]] || rm -f -- "$nested_tmp"
+            nested_tmp=''
         fi
+        while :; do
+            local -a member_options=("[PREVIEW] Preview member" "[METADATA] Inspect metadata" "[BACK] Return")
+            [[ "$nested_kind" != unknown ]] && member_options=("[OPEN] Open nested archive" "${member_options[@]}")
+            member_action="$(_omnish_select "Archive member — $member_path" < <(printf '%s\n' "${member_options[@]}"))" || member_action='[BACK] Return'
+            case "$member_action" in
+                "[OPEN] Open nested archive")
+                    nested_hash="$(sha256sum -- "$nested_tmp" 2>/dev/null)"; nested_hash="${nested_hash%% *}"
+                    if [[ "$nested_hash" =~ ^[a-fA-F0-9]{64}$ ]] && [[ "$seen" != *"|$nested_hash|"* ]]; then archive_browse "$nested_tmp" "$((depth + 1))" "${seen}${nested_hash}|"
+                    else status_msg "nested archive cycle detected"; fi
+                    break ;;
+                "[PREVIEW] Preview member")
+                    if [[ -n "$nested_tmp" && -s "$nested_tmp" ]]; then
+                        _archive_preview_staged_file "$nested_tmp" "$member_path"
+                    else
+                        status_msg "preview unavailable: member exceeds configured streaming limits"
+                    fi
+                    read -rsn 1 -p "Press any key to return…" </dev/tty 2>/dev/null || : ;;
+                "[METADATA] Inspect metadata")
+                    if [[ -n "$nested_tmp" && -s "$nested_tmp" ]]; then
+                        printf 'Archive: %s\nMember:  %s\n\n' "${archive##*/}" "$member_path"
+                        _archive_file_metadata "$nested_tmp" "Member metadata"
+                    else _archive_show_member_metadata "$archive" "$member_path"; fi
+                    read -rsn 1 -p "Press any key to return…" </dev/tty 2>/dev/null || : ;;
+                *) break ;;
+            esac
+        done
+        [[ -z "$nested_tmp" ]] || rm -f -- "$nested_tmp"
     done
 }
 _archive_size() {

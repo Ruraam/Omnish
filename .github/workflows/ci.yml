@@ -43,6 +43,8 @@ jobs:
         run: bash tests/archive_magic_detection.sh
       - name: Quick Archive nested archive integration
         run: bash tests/archive_nested.sh
+      - name: Quick Archive v2 browser integration
+        run: bash tests/archive_browser_v2.sh
       - name: Installer integration tests
         run: bash tests/install.sh
       - name: Checkout ULPM packaging engine
