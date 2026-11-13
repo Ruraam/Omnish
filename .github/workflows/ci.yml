@@ -41,6 +41,8 @@ jobs:
         run: bash tests/archive_security.sh
       - name: Quick Archive magic detection integration
         run: bash tests/archive_magic_detection.sh
+      - name: Quick Archive nested archive integration
+        run: bash tests/archive_nested.sh
       - name: Installer integration tests
         run: bash tests/install.sh
       - name: Checkout ULPM packaging engine
