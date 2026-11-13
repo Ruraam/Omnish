@@ -300,9 +300,12 @@ archive_browse() {
         member_path="$rel"
         for entry in "${members[@]}"; do [[ "${entry#./}" == "$rel" ]] && { member_path="$entry"; break; }; done
         nested_kind=unknown; nested_tmp=''
-        if (( depth < max_depth )) && command -v sha256sum >/dev/null 2>&1; then
-            nested_tmp="$(mktemp "${TMP_OMNISH_DIR:-${TMPDIR:-/tmp}}/omnish-nested.XXXXXX")" || nested_tmp=''
-            if [[ -n "$nested_tmp" ]] && _archive_nested_member_to_file "$archive" "$member_path" "$nested_tmp"; then nested_kind="$(_archive_kind "$nested_tmp")"; fi
+        nested_tmp="$(mktemp "${TMP_OMNISH_DIR:-${TMPDIR:-/tmp}}/omnish-member.XXXXXX")" || nested_tmp=''
+        if [[ -n "$nested_tmp" ]] && _archive_nested_member_to_file "$archive" "$member_path" "$nested_tmp"; then
+            if (( depth < max_depth )) && command -v sha256sum >/dev/null 2>&1; then nested_kind="$(_archive_kind "$nested_tmp")"; fi
+        else
+            [[ -z "$nested_tmp" ]] || rm -f -- "$nested_tmp"
+            nested_tmp=''
         fi
         while :; do
             local -a member_options=("[PREVIEW] Preview member" "[METADATA] Inspect metadata" "[BACK] Return")
