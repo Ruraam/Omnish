@@ -217,7 +217,7 @@ _archive_file_metadata() {
 
 _archive_preview_staged_file() {
     local file="$1" member="$2" ext preview_path rc
-    ext="\${member##*.}"
+    ext="${member##*.}"
     [[ "$ext" != "$member" && "$ext" =~ ^[A-Za-z0-9]{1,12}$ ]] || ext=bin
     preview_path="$file.preview.$ext"
     ln -s -- "$file" "$preview_path" || return 1
