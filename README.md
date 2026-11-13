@@ -77,7 +77,7 @@ omnish                       # auto: fzf when available, otherwise loop
         <li>Create symlinks and toggle executable bits</li>
         <li>Open files with the system MIME handler</li>
         <li>Optional live recursive search with ripgrep</li>
-        <li>Quick Archive: compress selections and browse archives as read-only folders, including bounded nested-archive navigation</li>
+        <li>Quick Archive: compress selections; browse archives read-only with bounded nested navigation, case-insensitive member search, previews and metadata</li>
       </ul>
     </td>
     <td width="50%">
@@ -212,7 +212,7 @@ The uninstaller removes the application and its launcher. It deliberately keeps 
 | Recursive search | ripgrep (`rg`) |
 | Archive support | tar; unzip for ZIP/APK; dpkg-deb for DEB; `unsquashfs` for ULPM SquashFS LPK; optional `bsdtar` (libarchive) for RAR, 7z, ISO, CAB and AR when supported by the installed libarchive build; zip and zstd for optional creation formats |
 
-Quick Archive's CI includes real 7z, ISO-9660, CAB, ar and RAR3 fixtures. The RAR3 fixture is a tiny CC0 test archive pinned to an upstream commit; actual RAR browsing still depends on the installed libarchive build and its RAR reader support. Security tests cover malformed containers, traversal and absolute member paths, read-only inspection, and complete streaming of an 8 MiB member. A separate signature-detection suite verifies recognition when extensions are missing or misleading. Nested archives can be opened recursively in a read-only view (maximum depth 4 by default); selected nested members are copied to a temporary file only, with a 64 MiB default size ceiling and a 15-second extraction timeout. Configure `OMNISH_NESTED_ARCHIVE_MAX_DEPTH`, `OMNISH_NESTED_ARCHIVE_MAX_BYTES` and `OMNISH_NESTED_ARCHIVE_TIMEOUT` to adjust these limits.
+Quick Archive's CI includes real 7z, ISO-9660, CAB, ar and RAR3 fixtures. The RAR3 fixture is a tiny CC0 test archive pinned to an upstream commit; actual RAR browsing still depends on the installed libarchive build and its RAR reader support. Security tests cover malformed containers, traversal and absolute member paths, read-only inspection, and complete streaming of an 8 MiB member. A separate signature-detection suite verifies recognition when extensions are missing or misleading. Nested archives can be opened recursively in a read-only view (maximum depth 4 by default). The browser also offers case-insensitive member filtering, file previews (including images and first-page PDF text when existing preview tools are installed), and archive/member metadata including MIME type, size, permissions, modification time and SHA-256. Preview and metadata stream only the selected member into a temporary file; the 64 MiB default ceiling and 15-second extraction timeout still apply. Configure `OMNISH_NESTED_ARCHIVE_MAX_DEPTH`, `OMNISH_NESTED_ARCHIVE_MAX_BYTES` and `OMNISH_NESTED_ARCHIVE_TIMEOUT` to adjust these limits.
 | Native dialogs | whiptail or dialog |
 | Long listing | eza (otherwise standard `ls`) |
 
@@ -258,6 +258,7 @@ Press **F2** in either backend (fzf also supports **Ctrl+Space**) to open the pr
 | `p` / `x` / `X` | Paste marks / inspect / toggle executable |
 | `Z` | Quick Archive: compress marked files (`.tar.gz`, `.tar.zst`, `.zip`) with a size estimate |
 | `Enter` on archive | Browse `.tar.*`, `.zip`, `.deb`, `.apk`, ULPM v5 SquashFS `.lpk`, and (with `bsdtar`) RAR, 7z, ISO, CAB and AR without extracting |
+| Quick Archive browser | `[SEARCH]` filters member paths (case-insensitive); `[ARCHIVE INFO]` shows container metadata; select a file for preview, member metadata or nested-archive navigation |
 | `Ctrl+P` | Toggle preview pane |
 | `Alt+H` | Toggle hidden files |
 | `Alt+L` | Toggle long listing |
