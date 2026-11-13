@@ -26,7 +26,7 @@ grep -Fq 'SHA-256:' <<<"$metadata"
 preview_seen=''
 _preview_file() { preview_seen="$1"; [[ "$1" == *.TXT ]]; }
 _archive_preview_staged_file "$member" "docs/ReleaseNotes.TXT"
-[[ "$preview_seen" == *.TXT && -L "$preview_seen" || "$preview_seen" == *.TXT ]]
+[[ "$preview_seen" == *.TXT && ! -e "$preview_seen" ]]
 before="$(sha256sum "$WORK/fixture.tar")"
 _archive_file_metadata "$WORK/fixture.tar" "Archive metadata" >/dev/null
 after="$(sha256sum "$WORK/fixture.tar")"
