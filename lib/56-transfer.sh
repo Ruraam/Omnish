@@ -55,10 +55,10 @@ _transfer_qr() {
 _transfer_http_server() {
     local stage="$1" port="$2" ip="$3" server_pid='' url="http://$ip:$port/"
     if command -v python3 >/dev/null 2>&1; then
-        (cd -- "$stage" && exec python3 -m http.server "$port" --bind 0.0.0.0) >/dev/tty 2>&1 &
+        (cd -- "$stage" && exec python3 -m http.server "$port" --bind "$ip") >/dev/tty 2>&1 &
         server_pid=$!
     elif command -v busybox >/dev/null 2>&1; then
-        (cd -- "$stage" && exec busybox httpd -f -p "0.0.0.0:$port") >/dev/tty 2>&1 &
+        (cd -- "$stage" && exec busybox httpd -f -p "$ip:$port" -h "$stage") >/dev/tty 2>&1 &
         server_pid=$!
     else
         _transfer_err "python3 or busybox is required for local HTTP sharing"; return 127
@@ -89,9 +89,9 @@ _transfer_http() {
 
 _transfer_croc() {
     local code
-    code=$(printf '%04d' "$((RANDOM % 10000))")
+    code=$(printf '%04x%04x%04x%04x' "$RANDOM" "$RANDOM" "$RANDOM" "$RANDOM")
     printf 'croc transfer code: %s\n' "$code" >/dev/tty 2>/dev/null || :
-    croc send --code "$code" -- "$@"
+    CROC_SECRET="$code" croc send "$@"
 }
 
 _transfer_wormhole() { wormhole send "$@"; }
