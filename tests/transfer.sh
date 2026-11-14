@@ -48,8 +48,8 @@ if command -v python3 >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
     export TMP_OMNISH_DIR="$WORK/tmp-root" TEST_HTTP_PORT="$http_port" TEST_HTTP_FILE="$WORK/http-payload.txt"
     bash -c '
         source "$1/lib/56-transfer.sh"
-_transfer_local_ip() { printf '%s\n' 127.0.0.1; }
-_transfer_random_port() { printf '%s\n' "$TEST_HTTP_PORT"; }
+_transfer_local_ip() { echo 127.0.0.1; }
+_transfer_random_port() { echo "$TEST_HTTP_PORT"; }
         _transfer_http "$TEST_HTTP_FILE"
     ' _ "$ROOT" >"$WORK/http-server.log" 2>&1 &
     http_pid=$!
