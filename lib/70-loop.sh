@@ -392,6 +392,8 @@ loop_handle_key() {
         $'\x04')  loop_with_terminal "delete_file" ;;
         $'\x0e')  loop_with_terminal "create_directory" ;;
         ALT_n)    loop_with_terminal "create_file" ;;
+        $'\x13')  loop_with_terminal "quick_transfer" ;;
+        ALT_s)    loop_with_terminal "create_symlink" ;;
         
         $'\x0f')  loop_open_external ;;
         r)        loop_rename_current ;;
