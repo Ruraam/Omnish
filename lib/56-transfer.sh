@@ -21,7 +21,7 @@ _transfer_random_port() {
 }
 
 _transfer_local_ip() {
-    local ip dev cidr iface candidate
+    local ip='' dev='' cidr iface candidate
     local -a candidates=()
 
     _transfer_valid_ipv4() {
