@@ -3,6 +3,7 @@ set -Eeuo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/omnish-transfer-test.XXXXXX")"
 trap 'rm -rf -- "$WORK"' EXIT
+trap 'rc=$?; printf "FAIL: transfer test line %s: %s (exit %s)\\n" "$LINENO" "$BASH_COMMAND" "$rc" >&2' ERR
 source "$ROOT/lib/56-transfer.sh"
 
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
