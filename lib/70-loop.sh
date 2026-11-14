@@ -846,50 +846,7 @@ loop_main() {
         IFS= read -rsn 1 -t 0.05 -u "$OMNISH_TTY_FD" k 2>/dev/null || continue
         loop_handle_key "$k"
     done
-}\x13')  loop_with_terminal "quick_transfer" ;;
-        ALT_s)    loop_with_terminal "create_symlink" ;;
-        $'\x0f')  loop_open_external ;;
-        r)        loop_rename_current ;;
-        p)        loop_paste ;;
-
-        # === Disk usage ===
-        $'\x15')  loop_dua ;;
-
-        # === System menu ===
-        $'\x18')
-                 loop_reset_terminal
-                 _sys_menu
-                 loop_setup_terminal
-                 loop_show_help=0
-                 loop_draw full
-                 ;;
-
-        # === Trash ===
-        ALT_u)    loop_undo_trash ;;
-        ALT_t)    loop_trash_view ;;
-
-        # === Search ===
-        $'\x07')  loop_grep ;;
-        /)        loop_search ;;
-
-        # === Shell / external ===
-        '!')      loop_shell ;;
-
-        # === Misc ===
-        x)        loop_stat_current ;;
-        X)        loop_toggle_executable ;;
-        '~')      loop_cd "$HOME" ;;
-        -)        loop_cd "$OLDPWD" ;;
-        :\ )      loop_go_dir ;;
-
-        [1-9])    local fav="OMNI_FAV$k"
-                  [[ -n "${!fav:-}" ]] && loop_cd "${!fav}" ;;
-
-        *)        : ;;
-    esac
 }
-
-# ===============================================================
 # Actions
 # ===============================================================
 loop_open_selected() {
