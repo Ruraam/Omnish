@@ -6,6 +6,23 @@ trap 'rm -rf -- "$WORK"' EXIT
 trap 'rc=$?; printf "FAIL: transfer test line %s: %s (exit %s)\\n" "$LINENO" "$BASH_COMMAND" "$rc" >&2' ERR
 source "$ROOT/lib/56-transfer.sh"
 
+# A VPN default route must not cause us to advertise its tunnel address.
+mkdir -p "$WORK/mock-ip"
+cat > "$WORK/mock-ip/ip" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == "-4 route get 1.1.1.1" ]]; then
+    printf '%s\n' '1.1.1.1 dev tun0 src 10.8.0.4 uid 1000'
+elif [[ "$*" == "-o -4 addr show scope global" ]]; then
+    printf '%s\n' '2: tun0 inet 10.8.0.4/24 scope global tun0'
+    printf '%s\n' '3: wlan0 inet 192.168.1.44/24 scope global wlan0'
+fi
+EOF
+chmod +x "$WORK/mock-ip/ip"
+lan_ip=$(PATH="$WORK/mock-ip:$PATH" _transfer_local_ip) || fail "LAN address detection failed behind VPN"
+[[ "$lan_ip" == "192.168.1.44" ]] || fail "VPN tunnel address was selected instead of LAN address: $lan_ip"
+
+fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
+
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 
 OMNISH_TRANSFER_PORT_MIN=41000
