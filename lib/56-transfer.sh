@@ -54,26 +54,71 @@ _transfer_qr() {
 
 _transfer_http_server() {
     local stage="$1" port="$2" ip="$3" server_pid='' url="http://$ip:$port/"
+    local server_output=/dev/null old_int_trap old_term_trap
+    local server_rc=0 interrupted=0 ready=0 attempt
+
     if command -v python3 >/dev/null 2>&1; then
-        (cd -- "$stage" && exec python3 -m http.server "$port" --bind "$ip") >/dev/tty 2>&1 &
+        if ( : >/dev/tty ) 2>/dev/null; then server_output=/dev/tty; fi
+        (cd -- "$stage" && exec python3 -m http.server "$port" --bind "$ip") >"$server_output" 2>&1 &
         server_pid=$!
     elif command -v busybox >/dev/null 2>&1; then
-        (cd -- "$stage" && exec busybox httpd -f -p "$ip:$port" -h "$stage") >/dev/tty 2>&1 &
+        if ( : >/dev/tty ) 2>/dev/null; then server_output=/dev/tty; fi
+        (cd -- "$stage" && exec busybox httpd -f -p "$ip:$port" -h "$stage") >"$server_output" 2>&1 &
         server_pid=$!
     else
-        _transfer_err "python3 or busybox is required for local HTTP sharing"; return 127
+        _transfer_err "python3 or busybox is required for local HTTP sharing"
+        return 127
     fi
-    sleep 0.3
-    kill -0 "$server_pid" 2>/dev/null || { _transfer_err "HTTP server failed to start"; return 1; }
-    clear </dev/tty 2>/dev/null || :
-    printf 'Quick Transfer — local HTTP\n\n' >/dev/tty
-    _transfer_qr "$url"
-    printf '\nServer is running. Press Ctrl+C to stop sharing.\n' >/dev/tty
-    trap 'kill "$server_pid" 2>/dev/null || :; wait "$server_pid" 2>/dev/null || :; return 0' INT TERM
-    wait "$server_pid" || :
-    trap - INT TERM
-}
 
+    # Wait for a real TCP listener, not merely a live PID (which can be a
+    # server that has already failed to bind because the port is occupied).
+    for ((attempt=0; attempt<30; attempt++)); do
+        if ! kill -0 "$server_pid" 2>/dev/null; then
+            wait "$server_pid" 2>/dev/null || :
+            _transfer_err "HTTP server exited before becoming ready"
+            return 1
+        fi
+        if ( exec 3<>"/dev/tcp/$ip/$port" ) 2>/dev/null; then
+            ready=1
+            break
+        fi
+        sleep 0.1
+    done
+    if (( ! ready )); then
+        kill "$server_pid" 2>/dev/null || :
+        wait "$server_pid" 2>/dev/null || :
+        _transfer_err "HTTP server did not become ready"
+        return 1
+    fi
+
+    clear </dev/tty 2>/dev/null || :
+    printf 'Quick Transfer — local HTTP\n\n' >/dev/tty 2>/dev/null || :
+    _transfer_qr "$url"
+    printf '\nServer is running. Press Ctrl+C to stop sharing.\n' >/dev/tty 2>/dev/null || :
+
+    # Preserve signal handlers installed by the caller; restore them after
+    # reaping the child so Quick Transfer does not alter the parent shell.
+    old_int_trap=$(trap -p INT || :)
+    old_term_trap=$(trap -p TERM || :)
+    trap 'interrupted=1; kill "$server_pid" 2>/dev/null || :' INT TERM
+
+    if wait "$server_pid"; then
+        server_rc=0
+    else
+        server_rc=$?
+    fi
+
+    if (( interrupted )); then
+        kill "$server_pid" 2>/dev/null || :
+        wait "$server_pid" 2>/dev/null || :
+        server_rc=0
+    fi
+
+    trap - INT TERM
+    [[ -n "$old_int_trap" ]] && eval "$old_int_trap"
+    [[ -n "$old_term_trap" ]] && eval "$old_term_trap"
+    return "$server_rc"
+}
 _transfer_http() {
     local -a files=("$@")
     local stage ip port
