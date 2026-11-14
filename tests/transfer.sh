@@ -74,6 +74,39 @@ _transfer_random_port() { echo "$TEST_HTTP_PORT"; }
     fi
 fi
 
+# Exercise the BusyBox httpd fallback with Python deliberately hidden from PATH.
+if command -v busybox >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
+    mkdir -p "$WORK/busybox-bin" "$WORK/busybox-stage"
+    busybox_path=$(command -v busybox)
+    ln -s "$busybox_path" "$WORK/busybox-bin/busybox"
+    ln -s "$busybox_path" "$WORK/busybox-bin/sleep"
+    printf 'busybox fallback payload\n' > "$WORK/busybox-stage/busybox-payload.txt"
+    busybox_port=43087
+    PATH="$WORK/busybox-bin" /bin/bash -c '
+        source "$1/lib/56-transfer.sh"
+        _transfer_http_server "$2" "$3" 127.0.0.1
+    ' _ "$ROOT" "$WORK/busybox-stage" "$busybox_port" >"$WORK/busybox-server.log" 2>&1 &
+    busybox_pid=$!
+
+    ready=0
+    for _ in {1..50}; do
+        if curl --fail --silent "http://127.0.0.1:$busybox_port/busybox-payload.txt" -o "$WORK/busybox-download.txt"; then
+            ready=1
+            break
+        fi
+        kill -0 "$busybox_pid" 2>/dev/null || break
+        sleep 0.1
+    done
+    (( ready )) || { cat "$WORK/busybox-server.log" >&2; fail "BusyBox httpd fallback did not serve staged file"; }
+    cmp -s "$WORK/busybox-stage/busybox-payload.txt" "$WORK/busybox-download.txt" || fail "BusyBox HTTP download content mismatch"
+
+    kill -TERM "$busybox_pid"
+    wait "$busybox_pid" || :
+    if curl --fail --silent --max-time 1 "http://127.0.0.1:$busybox_port/" >/dev/null; then
+        fail "BusyBox HTTP server remained reachable after SIGTERM"
+    fi
+fi
+
 # The dispatcher must prefer marked files over the current selection.
 marked_files=("$WORK/one.txt" "$WORK/two.txt")
 _omnish_select() { printf '%s\n' 'croc (encrypted)'; }
