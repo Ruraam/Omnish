@@ -57,6 +57,14 @@ _transfer_http_server() {
     local server_output=/dev/stderr old_int_trap old_term_trap
     local server_rc=0 interrupted=0 ready=0 attempt
 
+    # Fail before spawning a server when another process already owns the
+    # requested TCP port. This is a preflight check; a concurrent bind can
+    # still win the small interval before our server starts.
+    if ( exec 3<>"/dev/tcp/$ip/$port" ) 2>/dev/null; then
+        _transfer_err "TCP port $port is already in use on $ip"
+        return 1
+    fi
+
     if command -v python3 >/dev/null 2>&1; then
         if ( : >/dev/tty ) 2>/dev/null; then server_output=/dev/tty; fi
         (cd -- "$stage" && exec python3 -m http.server "$port" --bind "$ip") >"$server_output" 2>&1 &
