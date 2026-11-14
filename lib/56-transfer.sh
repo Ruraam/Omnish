@@ -126,8 +126,12 @@ _transfer_http() {
     _transfer_stage_files "$stage" "${files[@]}" || { rm -rf -- "$stage"; return 1; }
     ip=$(_transfer_local_ip) || { _transfer_err "cannot determine a LAN IPv4 address"; rm -rf -- "$stage"; return 1; }
     port=$(_transfer_random_port) || { _transfer_err "invalid transfer port range"; rm -rf -- "$stage"; return 1; }
-    _transfer_http_server "$stage" "$port" "$ip"
-    local rc=$?
+    local rc=0
+    if _transfer_http_server "$stage" "$port" "$ip"; then
+        rc=0
+    else
+        rc=$?
+    fi
     rm -rf -- "$stage"
     return "$rc"
 }
