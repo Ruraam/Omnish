@@ -64,7 +64,8 @@ _transfer_port_in_use() {
 }
 
 _transfer_http_server() {
-    local stage="$1" port="$2" ip="$3" server_pid='' url="http://$ip:$port/"
+    local stage="$1" port="$2" ip="$3" server_pid='' url
+    url="http://$ip:$port/"
     local server_output=/dev/stderr old_int_trap old_term_trap
     local server_rc=0 interrupted=0 ready=0 attempt
 
