@@ -23,6 +23,7 @@ USAGE
     --dua [DIR]              Launch disk usage panel directly on DIR
     --preview-file PATH      Print preview of PATH
     --scratchpad [PATH]      Open the private Markdown scratchpad
+    --send [PATH]            Send selected/marked file(s) via Quick Transfer
 
 ═══════════════════════════════════════════════════════════════════════════
 NAVIGATION
@@ -33,7 +34,7 @@ NAVIGATION
   F2                Open Scratchpad (fzf also supports Ctrl+Space)
   Z                 Quick Archive: compress marked items (tar.gz / tar.zst / zip)
   Enter on archive  Browse TAR/ZIP/DEB/APK/LPK; RAR/7z/ISO/CAB/AR via bsdtar
-  ^P               Toggle preview
+  ^S               Send via local HTTP, croc or Magic Wormhole\n  ^P               Toggle preview
   alt-h            Toggle hidden files    (loop: . also works)
   alt-l            Toggle long listing
   ~ / -            Go to $HOME / $OLDPWD  :           Go to arbitrary dir
@@ -41,7 +42,8 @@ NAVIGATION
 
 FILE OPERATIONS
   ^Y  copy            ^V  move             ^D / ^E  trash
-  ^N  mkdir           alt-n  touch         ^S      create symlink
+  ^N  mkdir           alt-n  touch         ^S      Quick Transfer
+  alt-s create symlink
   ^O  open (mime)     r  rename            p       paste marked here
   !   spawn $SHELL    x  stat              X       toggle executable bit
 
