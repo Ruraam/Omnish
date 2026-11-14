@@ -52,6 +52,17 @@ _transfer_qr() {
     printf '\nOpen on your phone:\n%s\n' "$url" >/dev/tty 2>/dev/null || printf '\n%s\n' "$url"
 }
 
+_transfer_port_in_use() {
+    local ip="$1" port="$2"
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import socket,sys; s=socket.socket(); s.settimeout(0.5); rc=s.connect_ex((sys.argv[1], int(sys.argv[2]))); s.close(); sys.exit(0 if rc == 0 else 1)' "$ip" "$port" >/dev/null 2>&1
+    elif command -v nc >/dev/null 2>&1; then
+        nc -z -w 1 "$ip" "$port" >/dev/null 2>&1
+    else
+        ( exec 3<>"/dev/tcp/$ip/$port" ) 2>/dev/null
+    fi
+}
+
 _transfer_http_server() {
     local stage="$1" port="$2" ip="$3" server_pid='' url="http://$ip:$port/"
     local server_output=/dev/stderr old_int_trap old_term_trap
@@ -60,7 +71,7 @@ _transfer_http_server() {
     # Fail before spawning a server when another process already owns the
     # requested TCP port. This is a preflight check; a concurrent bind can
     # still win the small interval before our server starts.
-    if ( exec 3<>"/dev/tcp/$ip/$port" ) 2>/dev/null; then
+    if _transfer_port_in_use "$ip" "$port"; then
         _transfer_err "TCP port $port is already in use on $ip"
         return 1
     fi
