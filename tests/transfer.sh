@@ -31,9 +31,21 @@ cat > "$WORK/bin/croc" <<'EOF'
 printf '%s\n' "$*" > "$CROC_ARGS"
 EOF
 chmod +x "$WORK/bin/croc"
-export CROC_ARGS="$WORK/croc.args"
+export CROC_ARGS="$WORK/croc.args" CROC_SECRET_OUT="$WORK/croc.secret"
 PATH="$WORK/bin:$PATH" _transfer_croc "$WORK/one.txt"
-grep -Eq '^send --code [0-9]{4} -- ' "$WORK/croc.args" || fail "croc did not receive a four-digit code"
+grep -Eq '^send ' "$WORK/croc.args" || fail "croc send command was not invoked"
+grep -Eq '^[[:xdigit:]]{16}
+grep -Fq -- "$WORK/one.txt" "$WORK/croc.args" || fail "croc did not receive selected path"
+
+# The dispatcher must prefer marked files over the current selection.
+marked_files=("$WORK/one.txt" "$WORK/two.txt")
+_omnish_select() { printf '%s\n' 'croc (encrypted)'; }
+PATH="$WORK/bin:$PATH" quick_transfer "$WORK/missing.txt"
+grep -Fq -- "$WORK/one.txt" "$WORK/croc.args" || fail "marked file one was not transferred"
+grep -Fq -- "$WORK/two.txt" "$WORK/croc.args" || fail "marked file two was not transferred"
+
+echo 'PASS: Quick Transfer staging, port bounds and optional backend dispatch.'
+ "$WORK/croc.secret" || fail "croc did not receive a valid 16-character secret"
 grep -Fq -- "$WORK/one.txt" "$WORK/croc.args" || fail "croc did not receive selected path"
 
 # The dispatcher must prefer marked files over the current selection.
