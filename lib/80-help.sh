@@ -34,7 +34,8 @@ NAVIGATION
   F2                Open Scratchpad (fzf also supports Ctrl+Space)
   Z                 Quick Archive: compress marked items (tar.gz / tar.zst / zip)
   Enter on archive  Browse TAR/ZIP/DEB/APK/LPK; RAR/7z/ISO/CAB/AR via bsdtar
-  ^S               Send via local HTTP, croc or Magic Wormhole\n  ^P               Toggle preview
+  ^S               Send via local HTTP, croc or Magic Wormhole
+  ^P               Toggle preview
   alt-h            Toggle hidden files    (loop: . also works)
   alt-l            Toggle long listing
   ~ / -            Go to $HOME / $OLDPWD  :           Go to arbitrary dir
