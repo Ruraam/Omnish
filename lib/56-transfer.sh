@@ -2,7 +2,7 @@
 # Local HTTP sharing with optional croc / Magic Wormhole integrations.
 
 _transfer_err() {
-    printf 'omnish transfer: %s\n' "$*" >/dev/tty 2>/dev/null || printf 'omnish transfer: %s\n' "$*" >&2
+    printf 'omnish transfer: %s\n' "$*" 2>/dev/null >/dev/tty || printf 'omnish transfer: %s\n' "$*" >&2
 }
 
 _transfer_private_dir() {
@@ -54,7 +54,7 @@ _transfer_qr() {
 
 _transfer_http_server() {
     local stage="$1" port="$2" ip="$3" server_pid='' url="http://$ip:$port/"
-    local server_output=/dev/null old_int_trap old_term_trap
+    local server_output=/dev/stderr old_int_trap old_term_trap
     local server_rc=0 interrupted=0 ready=0 attempt
 
     if command -v python3 >/dev/null 2>&1; then
@@ -139,7 +139,7 @@ _transfer_http() {
 _transfer_croc() {
     local code
     code=$(printf '%04x%04x%04x%04x' "$RANDOM" "$RANDOM" "$RANDOM" "$RANDOM")
-    printf 'croc transfer code: %s\n' "$code" >/dev/tty 2>/dev/null || :
+    printf 'croc transfer code: %s\n' "$code" 2>/dev/null >/dev/tty || :
     CROC_SECRET="$code" croc send "$@"
 }
 
