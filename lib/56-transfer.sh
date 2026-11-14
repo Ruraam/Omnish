@@ -21,15 +21,59 @@ _transfer_random_port() {
 }
 
 _transfer_local_ip() {
-    local ip
+    local ip dev cidr iface candidate
+    local -a candidates=()
+
+    _transfer_valid_ipv4() {
+        local value="$1" a b c d
+        [[ "$value" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
+        IFS=. read -r a b c d <<< "$value"
+        (( 10#$a <= 255 && 10#$b <= 255 && 10#$c <= 255 && 10#$d <= 255 ))
+    }
+
+    _transfer_usable_iface() {
+        case "$1" in
+            lo|tun*|tap*|wg*|tailscale*|zt*|ppp*|nordlynx*|proton*|mullvad*|docker*|veth*|cni*|podman*|flannel*|kube*|virbr*|vmnet*|vboxnet*)
+                return 1 ;;
+        esac
+        return 0
+    }
+
     if command -v ip >/dev/null 2>&1; then
-        ip=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')
-        [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] && { printf '%s\n' "$ip"; return 0; }
+        # Prefer the kernel-selected source address when its interface is a
+        # physical/LAN candidate. A VPN default route must not advertise its
+        # tunnel address to devices on the local network.
+        read -r dev ip < <(ip -4 route get 1.1.1.1 2>/dev/null |
+            awk '{for(i=1;i<=NF;i++){if($i=="dev") d=$(i+1); if($i=="src") s=$(i+1)} if(d!="" && s!=""){print d, s; exit}}')
+        if [[ -n "${dev:-}" ]] && _transfer_usable_iface "$dev" && _transfer_valid_ipv4 "${ip:-}"; then
+            printf '%s\n' "$ip"
+            return 0
+        fi
+
+        # Enumerate global IPv4 addresses, excluding tunnel and container
+        # interfaces. Prefer RFC1918 addresses for same-LAN device transfers.
+        while read -r iface cidr; do
+            _transfer_usable_iface "$iface" || continue
+            candidate="${cidr%%/*}"
+            _transfer_valid_ipv4 "$candidate" || continue
+            [[ "$candidate" == 169.254.* ]] && continue
+            candidates+=("$candidate")
+        done < <(ip -o -4 addr show scope global 2>/dev/null |
+            awk '{print $2, $4}')
+
+        for ip in "${candidates[@]}"; do
+            if [[ "$ip" == 10.* || "$ip" == 192.168.* ||
+                  "$ip" =~ ^172\.(1[6-9]|2[0-9]|3[0-1])\. ]]; then
+                printf '%s\n' "$ip"
+                return 0
+            fi
+        done
+        if (( ${#candidates[@]} > 0 )); then
+            printf '%s\n' "${candidates[0]}"
+            return 0
+        fi
     fi
-    if command -v hostname >/dev/null 2>&1; then
-        ip=$(hostname -I 2>/dev/null | awk '{print $1}')
-        [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] && { printf '%s\n' "$ip"; return 0; }
-    fi
+
     return 1
 }
 
