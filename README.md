@@ -215,6 +215,8 @@ The uninstaller removes the application and its launcher. It deliberately keeps 
 | Archive support | tar; unzip for ZIP/APK; dpkg-deb for DEB; `unsquashfs` for ULPM SquashFS LPK; optional `bsdtar` (libarchive) for RAR, 7z, ISO, CAB and AR when supported by the installed libarchive build; zip and zstd for optional creation formats |
 
 Quick Archive's CI includes real 7z, ISO-9660, CAB, ar and RAR3 fixtures. The RAR3 fixture is a tiny CC0 test archive pinned to an upstream commit; actual RAR browsing still depends on the installed libarchive build and its RAR reader support. Security tests cover malformed containers, traversal and absolute member paths, read-only inspection, and complete streaming of an 8 MiB member. A separate signature-detection suite verifies recognition when extensions are missing or misleading. Nested archives can be opened recursively in a read-only view (maximum depth 4 by default); selected nested members are copied to a temporary file only, with a 64 MiB default size ceiling and a 15-second extraction timeout. Configure `OMNISH_NESTED_ARCHIVE_MAX_DEPTH`, `OMNISH_NESTED_ARCHIVE_MAX_BYTES` and `OMNISH_NESTED_ARCHIVE_TIMEOUT` to adjust these limits.
+
+Quick Transfer's local HTTP mode is unauthenticated and intended only for trusted local networks: anyone who can reach the selected interface and port while sharing is active can download the staged files. For transfers over untrusted networks, use the optional encrypted croc or Magic Wormhole backends.
 | Native dialogs | whiptail or dialog |
 | Long listing | eza (otherwise standard `ls`) |
 
