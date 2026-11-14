@@ -39,6 +39,8 @@ grep -Eq '^send ' "$WORK/croc.args" || fail "croc send command was not invoked"
 grep -Eq '^[[:xdigit:]]{16}$' "$WORK/croc.secret" || fail "croc did not receive a valid 16-character secret"
 grep -Fq -- "$WORK/one.txt" "$WORK/croc.args" || fail "croc did not receive selected path"
 
+printf 'DEBUG: Croc integration passed\n' >&2
+
 # An occupied port must be rejected before a second server is spawned.
 if command -v python3 >/dev/null 2>&1; then
     occupied_port=43123
