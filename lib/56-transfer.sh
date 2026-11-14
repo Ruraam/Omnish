@@ -6,7 +6,7 @@ _transfer_err() {
 }
 
 _transfer_private_dir() {
-    local root="${TMP_OMNISH_DIR:-${TMPDIR:-/tmp}"
+    local root="${TMP_OMNISH_DIR:-${TMPDIR:-/tmp}}"
     mkdir -p -- "$root" 2>/dev/null || return 1
     umask 077
     mktemp -d "$root/omnish-transfer.XXXXXX"
@@ -78,11 +78,13 @@ _transfer_http() {
     local -a files=("$@")
     local stage ip port
     stage=$(_transfer_private_dir) || { _transfer_err "cannot create private staging directory"; return 1; }
-    trap 'rm -rf -- "$stage"' RETURN
-    _transfer_stage_files "$stage" "${files[@]}" || return 1
-    ip=$(_transfer_local_ip) || { _transfer_err "cannot determine a LAN IPv4 address"; return 1; }
-    port=$(_transfer_random_port) || { _transfer_err "invalid transfer port range"; return 1; }
+    _transfer_stage_files "$stage" "${files[@]}" || { rm -rf -- "$stage"; return 1; }
+    ip=$(_transfer_local_ip) || { _transfer_err "cannot determine a LAN IPv4 address"; rm -rf -- "$stage"; return 1; }
+    port=$(_transfer_random_port) || { _transfer_err "invalid transfer port range"; rm -rf -- "$stage"; return 1; }
     _transfer_http_server "$stage" "$port" "$ip"
+    local rc=$?
+    rm -rf -- "$stage"
+    return "$rc"
 }
 
 _transfer_croc() {
