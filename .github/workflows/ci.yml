@@ -43,7 +43,9 @@ jobs:
         run: bash tests/archive_magic_detection.sh
       - name: Quick Archive nested archive integration
         run: bash tests/archive_nested.sh
-      - name: Quick Transfer integration\n        run: bash tests/transfer.sh\n      - name: Installer integration tests
+      - name: Quick Transfer integration
+        run: bash tests/transfer.sh
+      - name: Installer integration tests
         run: bash tests/install.sh
       - name: Checkout ULPM packaging engine
         uses: actions/checkout@v4
