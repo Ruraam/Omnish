@@ -302,7 +302,8 @@ fzf_binds() {
             --bind 'ctrl-y:execute(bash "$OMNISH_ENTRYPOINT" --copy-file {})+top+accept' \
             --bind 'alt-n:execute(bash "$OMNISH_ENTRYPOINT" --create-file {})+top+accept' \
             --bind 'ctrl-n:execute(bash "$OMNISH_ENTRYPOINT" --create-directory {})+top+accept' \
-            --bind 'ctrl-s:execute(bash "$OMNISH_ENTRYPOINT" --create-symlink {})+top+accept' \
+            --bind 'ctrl-s:execute(bash "$OMNISH_ENTRYPOINT" --send {})+top+accept' \
+            --bind 'alt-s:execute(bash "$OMNISH_ENTRYPOINT" --create-symlink {})+top+accept' \
             --bind 'ctrl-d,ctrl-e:execute(bash "$OMNISH_ENTRYPOINT" --delete-file {})+top+accept' \
             --bind 'ctrl-u:execute(bash "$OMNISH_ENTRYPOINT" --dua "$PWD")+top+accept' \
             --bind 'alt-u:execute(bash "$OMNISH_ENTRYPOINT" --undo)+top+accept' \
