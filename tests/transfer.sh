@@ -54,12 +54,16 @@ if command -v python3 >/dev/null 2>&1; then
     done
     (( ready )) || { cat "$WORK/occupied-port.log" >&2; fail "could not start occupied-port fixture"; }
     printf 'DEBUG: occupied fixture ready\n' >&2
+    # Capture the diagnostic instead of allowing _transfer_err to write to /dev/tty.
+    _transfer_err() { printf 'omnish transfer: %s\\n' "$*" >&2; }
     if _transfer_http_server "$WORK/stage" "$occupied_port" 127.0.0.1 >"$WORK/occupied-server.log" 2>&1; then
         kill "$occupied_pid" 2>/dev/null || :
         wait "$occupied_pid" 2>/dev/null || :
         fail "HTTP server accepted an already occupied port"
+    else
+        server_rc=$?
     fi
-    printf 'DEBUG: occupied server rejected connection (rc=%s)\n' "$?" >&2
+    printf 'DEBUG: occupied server returned %s\\n' "$server_rc" >&2
     grep -Fq "TCP port $occupied_port is already in use" "$WORK/occupied-server.log" || { cat "$WORK/occupied-server.log" >&2; fail "occupied-port rejection did not explain the collision"; }
     printf 'DEBUG: occupied rejection message verified\n' >&2
     kill "$occupied_pid" 2>/dev/null || :
