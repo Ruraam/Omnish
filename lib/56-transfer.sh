@@ -77,6 +77,12 @@ _transfer_http_server() {
         return 1
     fi
 
+    # Install signal handling before starting the listener. Otherwise a client
+    # can connect during startup and terminate us before the cleanup trap exists.
+    old_int_trap=$(trap -p INT || :)
+    old_term_trap=$(trap -p TERM || :)
+    trap 'interrupted=1; [[ -n "$server_pid" ]] && kill "$server_pid" 2>/dev/null || :' INT TERM
+
     if command -v python3 >/dev/null 2>&1; then
         if ( : >/dev/tty ) 2>/dev/null; then server_output=/dev/tty; fi
         (cd -- "$stage" && exec python3 -m http.server "$port" --bind "$ip") >"$server_output" 2>&1 &
@@ -118,9 +124,14 @@ _transfer_http_server() {
 
     # Preserve signal handlers installed by the caller; restore them after
     # reaping the child so Quick Transfer does not alter the parent shell.
-    old_int_trap=$(trap -p INT || :)
-    old_term_trap=$(trap -p TERM || :)
-    trap 'interrupted=1; kill "$server_pid" 2>/dev/null || :' INT TERM
+    if (( interrupted )); then
+        kill "$server_pid" 2>/dev/null || :
+        wait "$server_pid" 2>/dev/null || :
+        trap - INT TERM
+        [[ -n "$old_int_trap" ]] && eval "$old_int_trap"
+        [[ -n "$old_term_trap" ]] && eval "$old_term_trap"
+        return 0
+    fi
 
     if wait "$server_pid"; then
         server_rc=0
