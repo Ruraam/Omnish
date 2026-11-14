@@ -100,7 +100,7 @@ quick_transfer() {
     local selected="${1:-}"
     local -a files=()
     local choice
-    if (( ${#marked_files[@]:-0} > 0 )); then files=("${marked_files[@]}"); elif [[ -n "$selected" && -f "$selected" ]]; then files=("$selected"); else
+    if (( ${#marked_files[@]} > 0 )); then files=("${marked_files[@]}"); elif [[ -n "$selected" && -f "$selected" ]]; then files=("$selected"); else
         _transfer_err "mark one or more regular files, or select a file first"; return 1
     fi
     choice=$(_omnish_select "Send ${#files[@]} file(s)" < <(
