@@ -93,7 +93,19 @@ _transfer_http_server() {
         server_pid=$!
     else
         _transfer_err "python3 or busybox is required for local HTTP sharing"
+        trap - INT TERM
+        [[ -n "$old_int_trap" ]] && eval "$old_int_trap"
+        [[ -n "$old_term_trap" ]] && eval "$old_term_trap"
         return 127
+    fi
+
+    if (( interrupted )); then
+        kill "$server_pid" 2>/dev/null || :
+        wait "$server_pid" 2>/dev/null || :
+        trap - INT TERM
+        [[ -n "$old_int_trap" ]] && eval "$old_int_trap"
+        [[ -n "$old_term_trap" ]] && eval "$old_term_trap"
+        return 0
     fi
 
     # Wait for a real TCP listener, not merely a live PID (which can be a
@@ -102,6 +114,9 @@ _transfer_http_server() {
         if ! kill -0 "$server_pid" 2>/dev/null; then
             wait "$server_pid" 2>/dev/null || :
             _transfer_err "HTTP server exited before becoming ready"
+            trap - INT TERM
+            [[ -n "$old_int_trap" ]] && eval "$old_int_trap"
+            [[ -n "$old_term_trap" ]] && eval "$old_term_trap"
             return 1
         fi
         if ( exec 3<>"/dev/tcp/$ip/$port" ) 2>/dev/null; then
@@ -114,6 +129,9 @@ _transfer_http_server() {
         kill "$server_pid" 2>/dev/null || :
         wait "$server_pid" 2>/dev/null || :
         _transfer_err "HTTP server did not become ready"
+        trap - INT TERM
+        [[ -n "$old_int_trap" ]] && eval "$old_int_trap"
+        [[ -n "$old_term_trap" ]] && eval "$old_term_trap"
         return 1
     fi
 
