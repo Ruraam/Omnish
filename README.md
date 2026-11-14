@@ -213,8 +213,6 @@ The uninstaller removes the application and its launcher. It deliberately keeps 
 | Recursive search | ripgrep (`rg`) |
 | Quick Transfer | Python 3 or BusyBox for temporary local HTTP; optional qrencode for ANSI QR output; optional croc or Magic Wormhole for encrypted/code-based transfers |
 | Archive support | tar; unzip for ZIP/APK; dpkg-deb for DEB; `unsquashfs` for ULPM SquashFS LPK; optional `bsdtar` (libarchive) for RAR, 7z, ISO, CAB and AR when supported by the installed libarchive build; zip and zstd for optional creation formats |
-
-
 | Native dialogs | whiptail or dialog |
 | Long listing | eza (otherwise standard `ls`) |
 
