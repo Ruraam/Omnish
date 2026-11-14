@@ -61,6 +61,8 @@ if command -v python3 >/dev/null 2>&1; then
     wait "$occupied_pid" 2>/dev/null || :
 fi
 
+printf 'DEBUG: occupied-port test passed\n' >&2
+
 # Exercise a real HTTP server without requiring a controlling terminal.
 if command -v python3 >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
     mkdir -p "$WORK/tmp-root"
@@ -97,6 +99,8 @@ _transfer_random_port() { echo "$TEST_HTTP_PORT"; }
     fi
 fi
 
+printf 'DEBUG: Python HTTP test passed\n' >&2
+
 # Exercise the BusyBox httpd fallback with Python deliberately hidden from PATH.
 if command -v busybox >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
     mkdir -p "$WORK/busybox-bin" "$WORK/busybox-stage"
@@ -129,6 +133,8 @@ if command -v busybox >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
         fail "BusyBox HTTP server remained reachable after SIGTERM"
     fi
 fi
+
+printf 'DEBUG: BusyBox HTTP test passed\n' >&2
 
 # The dispatcher must prefer marked files over the current selection.
 marked_files=("$WORK/one.txt" "$WORK/two.txt")
