@@ -34,7 +34,7 @@ jobs:
       - name: Install real archive fixture tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y libarchive-tools genisoimage gcab binutils curl
+          sudo apt-get install -y libarchive-tools genisoimage gcab binutils curl busybox-static
       - name: Real Quick Archive format integration
         run: bash tests/archive_real_formats.sh
       - name: Quick Archive security and stress integration
