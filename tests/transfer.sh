@@ -6,6 +6,8 @@ trap 'rm -rf -- "$WORK"' EXIT
 trap 'rc=$?; printf "FAIL: transfer test line %s: %s (exit %s)\\n" "$LINENO" "$BASH_COMMAND" "$rc" >&2' ERR
 source "$ROOT/lib/56-transfer.sh"
 
+fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
+
 # A VPN default route must not cause us to advertise its tunnel address.
 mkdir -p "$WORK/mock-ip"
 cat > "$WORK/mock-ip/ip" <<'EOF'
@@ -21,7 +23,6 @@ chmod +x "$WORK/mock-ip/ip"
 lan_ip=$(PATH="$WORK/mock-ip:$PATH" _transfer_local_ip) || fail "LAN address detection failed behind VPN"
 [[ "$lan_ip" == "192.168.1.44" ]] || fail "VPN tunnel address was selected instead of LAN address: $lan_ip"
 
-fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 
