@@ -21,12 +21,12 @@ _transfer_random_port() {
 }
 
 _transfer_local_ip() {
-    local ip='' dev='' cidr iface candidate
+    local ip='' route_ip='' route_dev='' dev='' cidr iface candidate
     local -a candidates=()
 
     _transfer_valid_ipv4() {
         local value="$1" a b c d
-        [[ "$value" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
+        [[ "$value" =~ ^([0-9]{1,3}\\.){3}[0-9]{1,3}$ ]] || return 1
         IFS=. read -r a b c d <<< "$value"
         (( 10#$a <= 255 && 10#$b <= 255 && 10#$c <= 255 && 10#$d <= 255 ))
     }
@@ -40,18 +40,12 @@ _transfer_local_ip() {
     }
 
     if command -v ip >/dev/null 2>&1; then
-        # Prefer the kernel-selected source address when its interface is a
-        # physical/LAN candidate. A VPN default route must not advertise its
-        # tunnel address to devices on the local network.
-        read -r dev ip < <(ip -4 route get 1.1.1.1 2>/dev/null |
+        read -r route_dev route_ip < <(ip -4 route get 1.1.1.1 2>/dev/null |
             awk '{for(i=1;i<=NF;i++){if($i=="dev") d=$(i+1); if($i=="src") s=$(i+1)} if(d!="" && s!=""){print d, s; exit}}')
-        if [[ -n "${dev:-}" ]] && _transfer_usable_iface "$dev" && _transfer_valid_ipv4 "${ip:-}"; then
-            printf '%s\n' "$ip"
-            return 0
-        fi
 
-        # Enumerate global IPv4 addresses, excluding tunnel and container
-        # interfaces. Prefer RFC1918 addresses for same-LAN device transfers.
+        # Enumerate usable global addresses first. For same-LAN transfers,
+        # an RFC1918 address on Wi-Fi/Ethernet is usually more useful than a
+        # public address selected by the default route.
         while read -r iface cidr; do
             _transfer_usable_iface "$iface" || continue
             candidate="${cidr%%/*}"
@@ -63,20 +57,25 @@ _transfer_local_ip() {
 
         for ip in "${candidates[@]}"; do
             if [[ "$ip" == 10.* || "$ip" == 192.168.* ||
-                  "$ip" =~ ^172\.(1[6-9]|2[0-9]|3[0-1])\. ]]; then
-                printf '%s\n' "$ip"
+                  "$ip" =~ ^172\\.(1[6-9]|2[0-9]|3[0-1])\\. ]]; then
+                printf '%s\\n' "$ip"
                 return 0
             fi
         done
+
+        if [[ -n "${route_dev:-}" ]] && _transfer_usable_iface "$route_dev" &&
+           _transfer_valid_ipv4 "${route_ip:-}"; then
+            printf '%s\\n' "$route_ip"
+            return 0
+        fi
         if (( ${#candidates[@]} > 0 )); then
-            printf '%s\n' "${candidates[0]}"
+            printf '%s\\n' "${candidates[0]}"
             return 0
         fi
     fi
 
     return 1
 }
-
 _transfer_stage_files() {
     local stage="$1" src base dest n=1
     shift
