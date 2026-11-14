@@ -23,8 +23,34 @@ chmod +x "$WORK/mock-ip/ip"
 lan_ip=$(PATH="$WORK/mock-ip:$PATH" _transfer_local_ip) || fail "LAN address detection failed behind VPN"
 [[ "$lan_ip" == "192.168.1.44" ]] || fail "VPN tunnel address was selected instead of LAN address: $lan_ip"
 
+# When multiple physical interfaces exist, prefer the private LAN address
+# over a public address selected by the default route.
+cat > "$WORK/mock-ip/ip" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == "-4 route get 1.1.1.1" ]]; then
+    printf '%s\\n' '1.1.1.1 dev eth0 src 203.0.113.10 uid 1000'
+elif [[ "$*" == "-o -4 addr show scope global" ]]; then
+    printf '%s\\n' '2: eth0 inet 203.0.113.10/24 scope global eth0'
+    printf '%s\\n' '3: wlan0 inet 192.168.1.44/24 scope global wlan0'
+fi
+EOF
+lan_ip=$(PATH="$WORK/mock-ip:$PATH" _transfer_local_ip) || fail "multi-interface address detection failed"
+[[ "$lan_ip" == "192.168.1.44" ]] || fail "public default-route address won over private LAN address: $lan_ip"
 
-fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
+# No usable interface must fail instead of advertising loopback/tunnel data.
+cat > "$WORK/mock-ip/ip" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == "-4 route get 1.1.1.1" ]]; then
+    printf '%s\\n' '1.1.1.1 dev wg0 src 10.7.0.2 uid 1000'
+fi
+EOF
+if PATH="$WORK/mock-ip:$PATH" _transfer_local_ip >/dev/null; then
+    fail "address detection accepted a machine without a usable interface"
+fi
+
+
+
+
 
 OMNISH_TRANSFER_PORT_MIN=41000
 OMNISH_TRANSFER_PORT_MAX=41010
