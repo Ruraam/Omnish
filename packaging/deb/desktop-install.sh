@@ -11,7 +11,7 @@ APP="$HOME/.local/bin/omnish"
 [[ -x "$APP" ]] || die "user-local Omnish launcher not found at $APP"
 
 SELF_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-ICON_SOURCE="$SELF_DIR/../../assets/omnish-icon.svg"
+ICON_SOURCE="$SELF_DIR/assets/omnish-icon.svg"
 [[ -r "$ICON_SOURCE" ]] || die "SVG icon is missing: $ICON_SOURCE"
 
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
@@ -24,6 +24,7 @@ escape_exec() {
     local value=$1
     value=${value//\\/\\\\}
     value=${value//\"/\\\"}
+    value=${value//%/%%}
     printf '%s' "$value"
 }
 
