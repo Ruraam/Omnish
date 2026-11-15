@@ -124,6 +124,11 @@ _transfer_http_server() {
         _transfer_err "TCP port $port is already in use on $ip"
         return 1
     fi
+    # The caller's outer cleanup trap remains active during the preflight.
+    # If it caught a signal here, do not start a listener afterwards.
+    if (( ${transfer_interrupted:-0} )); then
+        return "${transfer_signal_status:-1}"
+    fi
 
     # Install signal handling before starting the listener. Otherwise a client
     # can connect during startup and terminate us before the cleanup trap exists.
@@ -218,18 +223,52 @@ _transfer_http_server() {
 }
 _transfer_http() {
     local -a files=("$@")
-    local stage ip port
-    stage=$(_transfer_private_dir) || { _transfer_err "cannot create private staging directory"; return 1; }
-    _transfer_stage_files "$stage" "${files[@]}" || { rm -rf -- "$stage"; return 1; }
-    ip=$(_transfer_local_ip) || { _transfer_err "cannot determine a LAN IPv4 address"; rm -rf -- "$stage"; return 1; }
-    port=$(_transfer_random_port) || { _transfer_err "invalid transfer port range"; rm -rf -- "$stage"; return 1; }
-    local rc=0
-    if _transfer_http_server "$stage" "$port" "$ip"; then
-        rc=0
-    else
-        rc=$?
+    local stage='' ip='' port='' rc=0
+    local transfer_interrupted=0 transfer_signal_status=0
+    local old_int_trap old_term_trap
+
+    # Protect staging from the moment it is created, not only once the HTTP
+    # listener starts. The server helper temporarily installs its own traps
+    # and restores these caller-level handlers when it returns.
+    old_int_trap=$(trap -p INT || :)
+    old_term_trap=$(trap -p TERM || :)
+    trap 'transfer_interrupted=1; transfer_signal_status=130' INT
+    trap 'transfer_interrupted=1; transfer_signal_status=143' TERM
+
+    stage=$(_transfer_private_dir) || {
+        _transfer_err "cannot create private staging directory"
+        rc=1
+    }
+
+    if (( ! transfer_interrupted && rc == 0 )); then
+        _transfer_stage_files "$stage" "${files[@]}" || rc=$?
     fi
-    rm -rf -- "$stage"
+    if (( ! transfer_interrupted && rc == 0 )); then
+        ip=$(_transfer_local_ip) || {
+            _transfer_err "cannot determine a LAN IPv4 address"
+            rc=1
+        }
+    fi
+    if (( ! transfer_interrupted && rc == 0 )); then
+        port=$(_transfer_random_port) || {
+            _transfer_err "invalid transfer port range"
+            rc=1
+        }
+    fi
+    if (( ! transfer_interrupted && rc == 0 )); then
+        if _transfer_http_server "$stage" "$port" "$ip"; then
+            rc=0
+        else
+            rc=$?
+        fi
+    fi
+
+    (( ! transfer_interrupted )) || rc=$transfer_signal_status
+    [[ -z "$stage" ]] || rm -rf -- "$stage"
+
+    trap - INT TERM
+    [[ -n "$old_int_trap" ]] && eval "$old_int_trap"
+    [[ -n "$old_term_trap" ]] && eval "$old_term_trap"
     return "$rc"
 }
 
