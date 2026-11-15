@@ -28,7 +28,7 @@ jobs:
       - name: ShellCheck errors
         run: |
           set -euo pipefail
-          shellcheck --shell=bash --severity=error install.sh uninstall.sh omnish lib/*.sh tests/*.sh
+          shellcheck --shell=bash --severity=error install.sh uninstall.sh omnish lib/*.sh tests/*.sh packaging/deb/*.sh
       - name: Regression tests
         run: bash tests/regression.sh
       - name: Install real archive fixture tools
@@ -47,6 +47,11 @@ jobs:
         run: bash tests/transfer.sh
       - name: Installer integration tests
         run: bash tests/install.sh
+      - name: Build Debian package smoke test
+        run: |
+          set -euo pipefail
+          bash packaging/deb/build.sh 3.0.0 "$RUNNER_TEMP/omnish-deb"
+          bash packaging/deb/test.sh "$RUNNER_TEMP/omnish-deb/omnish_3.0.0_all.deb"
       - name: Checkout ULPM packaging engine
         uses: actions/checkout@v4
         with:

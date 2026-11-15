@@ -177,11 +177,29 @@ printf '  executable: %s/omnish\n' "$BIN"
 printf '  application: %s/\n' "$SHARE"
 printf '  config:      %s/omnish/omnish.conf\n' "${XDG_CONFIG_HOME:-$HOME/.config}"
 
+# Add ~/.local/bin to Bash PATH exactly once, without overwriting user settings.
+BASHRC="$HOME_CANON/.bashrc"
+PATH_START="# >>> omnish PATH >>>"
+if [[ ! -e "$BASHRC" ]]; then
+    (umask 077 && : > "$BASHRC") || _die "cannot create $BASHRC"
+fi
+if ! grep -Fq -- "$PATH_START" "$BASHRC"; then
+    {
+        if [[ -s "$BASHRC" ]] && [[ "$(tail -c 1 "$BASHRC" | wc -l)" -eq 0 ]]; then
+            printf '\n'
+        fi
+        printf '%s\n' "$PATH_START"
+        printf '%s\n' 'case ":$PATH:" in'
+        printf '    *":$HOME/.local/bin:"*) ;;\n'
+        printf '    *) export PATH="$HOME/.local/bin:$PATH" ;;\n'
+        printf '%s\n' '# <<< omnish PATH <<<'
+    } >> "$BASHRC" || _die "cannot update $BASHRC"
+    _log "added $HOME_CANON/.local/bin to PATH in ~/.bashrc"
+else
+    _log "PATH entry already present in ~/.bashrc"
+fi
 case ":$PATH:" in
     *":$BIN:"*) ;;
-    *)
-        printf '\nnote: %s is not in PATH. Add this to your shell profile:\n' "$BIN"
-        printf '  export PATH="%s:$PATH"\n' "$BIN"
-        ;;
+    *) export PATH="$BIN:$PATH" ;;
 esac
-printf "\nRun 'omnish --version' to verify.\n"
+printf "\nOpen a new terminal or run 'source ~/.bashrc', then use 'omnish --version'.\n"

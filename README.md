@@ -199,6 +199,27 @@ Non-interactive or preview-only:
 
 The uninstaller removes the application and its launcher. It deliberately keeps your configuration, cache and user data so that uninstalling Omnish does not silently erase your personal files.
 
+### Debian package and desktop integration
+
+Each published `v*` GitHub Release receives an `omnish_VERSION_all.deb` asset. The Debian package provides a small system-wide bootstrap only; it does **not** install the running application into a system directory or guess which user's HOME should be modified.
+
+Install the downloaded package with your Debian package manager, then run the installer as your regular desktop user (without `sudo`):
+
+```bash
+sudo apt install ./omnish_VERSION_all.deb
+omnish-install
+```
+
+This installs the application in `~/.local/share/omnish`, its launcher in `~/.local/bin/omnish`, and a per-user application-menu entry with the Omnish SVG icon. The menu entry launches Omnish in a terminal.
+
+To remove the user-local application, launcher, menu entry and icon, run:
+
+```bash
+omnish-uninstall
+```
+
+You can then remove the bootstrap package with `sudo apt remove omnish`. Your configuration and personal data are retained by the uninstaller.
+
 ---
 
 ## 🧰 Requirements

@@ -1,0 +1,46 @@
+name: Omnish Debian Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-deb:
+    if: startsWith(github.event.release.tag_name, 'v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the exact release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev
+
+      - name: Validate shell scripts
+        run: |
+          set -euo pipefail
+          bash -n packaging/deb/build.sh
+          bash -n packaging/deb/desktop-install.sh
+          bash -n packaging/deb/desktop-uninstall.sh
+          bash -n packaging/deb/test.sh
+
+      - name: Build Debian package
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          bash packaging/deb/build.sh "$VERSION" dist
+
+      - name: End-to-end Debian package test
+        run: bash packaging/deb/test.sh "dist/omnish_${GITHUB_REF_NAME#v}_all.deb"
+
+      - name: Attach Debian package to this GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/*.deb --clobber

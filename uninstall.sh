@@ -80,10 +80,20 @@ fi
 removed=0; failed=0
 
 if (( exists_bin )); then
-    rm -f "$BIN" 2>/dev/null && ((removed++)) || { echo "warn: cannot remove $BIN" >&2; ((failed++)); }
+    if rm -f -- "$BIN" 2>/dev/null; then
+        ((removed += 1))
+    else
+        echo "warn: cannot remove $BIN" >&2
+        ((failed += 1))
+    fi
 fi
 if (( exists_share )); then
-    rm -rf "$SHARE" 2>/dev/null && ((removed++)) || { echo "warn: cannot remove $SHARE" >&2; ((failed++)); }
+    if rm -rf -- "$SHARE" 2>/dev/null; then
+        ((removed += 1))
+    else
+        echo "warn: cannot remove $SHARE" >&2
+        ((failed += 1))
+    fi
 fi
 
 [[ -f "$CACHE/.omnish_d" ]] && rm -f "$CACHE/.omnish_d" 2>/dev/null
@@ -107,6 +117,37 @@ done
 echo ""
 echo "to clean everything:"
 echo "  rm -rf \"$CACHE\" \"$DATA\" \"$CONFIG\""
+
+# Remove only the PATH block managed by Omnish; preserve all other shell config.
+BASHRC="$HOME_CANON/.bashrc"
+if [[ -f "$BASHRC" ]] && grep -Fq '# >>> omnish PATH >>>' "$BASHRC"; then
+    if (( dry_run )); then
+        echo "  would remove Omnish PATH block from $BASHRC"
+    else
+        tmp_bashrc="$(mktemp "$HOME_CANON/.bashrc.omnish.XXXXXX")" || {
+            echo "warning: cannot stage ~/.bashrc cleanup" >&2
+            exit 1
+        }
+        if awk '
+            $0 == "# >>> omnish PATH >>>" { skip=1; next }
+            $0 == "# <<< omnish PATH <<<" { skip=0; next }
+            !skip { print }
+        ' "$BASHRC" > "$tmp_bashrc"; then
+            chmod --reference="$BASHRC" "$tmp_bashrc" 2>/dev/null || chmod 0644 "$tmp_bashrc"
+            mv -f -- "$tmp_bashrc" "$BASHRC" || {
+                rm -f -- "$tmp_bashrc"
+                echo "warning: cannot replace ~/.bashrc" >&2
+                exit 1
+            }
+            echo "removed Omnish PATH block from $BASHRC"
+        else
+            rm -f -- "$tmp_bashrc"
+            echo "warning: could not process ~/.bashrc" >&2
+            exit 1
+        fi
+    fi
+fi
+
 
 if grep -qE '(^|[^a-zA-Z0-9_])omnish[[:space:]]*\(\)' "$HOME/.bashrc" 2>/dev/null; then
     echo ""
