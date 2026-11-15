@@ -26,7 +26,7 @@ _transfer_local_ip() {
 
     _transfer_valid_ipv4() {
         local value="$1" a b c d
-        [[ "$value" =~ ^([0-9]{1,3}\\.){3}[0-9]{1,3}$ ]] || return 1
+        [[ "$value" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
         IFS=. read -r a b c d <<< "$value"
         (( 10#$a <= 255 && 10#$b <= 255 && 10#$c <= 255 && 10#$d <= 255 ))
     }
@@ -57,19 +57,19 @@ _transfer_local_ip() {
 
         for ip in "${candidates[@]}"; do
             if [[ "$ip" == 10.* || "$ip" == 192.168.* ||
-                  "$ip" =~ ^172\\.(1[6-9]|2[0-9]|3[0-1])\\. ]]; then
-                printf '%s\\n' "$ip"
+                  "$ip" =~ ^172\.(1[6-9]|2[0-9]|3[0-1])\. ]]; then
+                printf '%s\n' "$ip"
                 return 0
             fi
         done
 
         if [[ -n "${route_dev:-}" ]] && _transfer_usable_iface "$route_dev" &&
            _transfer_valid_ipv4 "${route_ip:-}"; then
-            printf '%s\\n' "$route_ip"
+            printf '%s\n' "$route_ip"
             return 0
         fi
         if (( ${#candidates[@]} > 0 )); then
-            printf '%s\\n' "${candidates[0]}"
+            printf '%s\n' "${candidates[0]}"
             return 0
         fi
     fi
