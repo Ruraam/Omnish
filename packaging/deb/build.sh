@@ -70,7 +70,7 @@ Priority: optional
 Architecture: all
 Maintainer: Omnish contributors <noreply@github.com>
 Homepage: https://github.com/Ruraam/Omnish
-Depends: bash, coreutils, findutils, grep, sed
+Depends: bash, coreutils, findutils, grep, mawk, sed
 Description: modular terminal file manager and system console
  Omnish is a modular Bash file manager with fzf and minimal loop backends,
  archive browsing, local file transfer and a system console.
