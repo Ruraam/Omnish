@@ -134,7 +134,8 @@ _transfer_http_server() {
     # can connect during startup and terminate us before the cleanup trap exists.
     old_int_trap=$(trap -p INT || :)
     old_term_trap=$(trap -p TERM || :)
-    trap 'interrupted=1; if [[ -n "$server_pid" ]]; then kill "$server_pid" 2>/dev/null || :; wait "$server_pid" 2>/dev/null || :; fi' INT TERM
+    trap 'interrupted=1; transfer_interrupted=1; transfer_signal_status=130; if [[ -n "$server_pid" ]]; then kill "$server_pid" 2>/dev/null || :; wait "$server_pid" 2>/dev/null || :; fi' INT
+    trap 'interrupted=1; transfer_interrupted=1; transfer_signal_status=143; if [[ -n "$server_pid" ]]; then kill "$server_pid" 2>/dev/null || :; wait "$server_pid" 2>/dev/null || :; fi' TERM
 
     if command -v python3 >/dev/null 2>&1; then
         if ( : >/dev/tty ) 2>/dev/null; then server_output=/dev/tty; fi
