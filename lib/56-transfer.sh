@@ -25,10 +25,13 @@ _transfer_local_ip() {
     local -a candidates=()
 
     _transfer_valid_ipv4() {
-        local value="$1" a b c d
+        local value="$1" a b c d octet
         [[ "$value" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
         IFS=. read -r a b c d <<< "$value"
-        (( 10#$a <= 255 && 10#$b <= 255 && 10#$c <= 255 && 10#$d <= 255 ))
+        for octet in "$a" "$b" "$c" "$d"; do
+            (( 10#$octet <= 255 )) || return 1
+        done
+        return 0
     }
 
     _transfer_usable_iface() {
