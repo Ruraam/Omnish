@@ -8,6 +8,24 @@ source "$ROOT/lib/56-transfer.sh"
 
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 
+# Ask the OS for an ephemeral loopback port where possible. On minimal systems
+# without Python, fall back to a checked random high port.
+_test_pick_port() {
+    local candidate attempt
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()'
+        return
+    fi
+    for attempt in {1..100}; do
+        candidate=$((40000 + RANDOM % 20000))
+        if ! _transfer_port_in_use 127.0.0.1 "$candidate"; then
+            printf '%s\\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
 # A VPN default route must not cause us to advertise its tunnel address.
 mkdir -p "$WORK/mock-ip"
 cat > "$WORK/mock-ip/ip" <<'EOF'
@@ -114,8 +132,8 @@ printf 'DEBUG: Croc integration passed\n' >&2
 
 # An occupied port must be rejected before a second server is spawned.
 if command -v python3 >/dev/null 2>&1; then
-    occupied_port=43123
-    python3 -c 'import socket,time; s=socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(("127.0.0.1", 43123)); s.listen(); print("ready", flush=True); time.sleep(10)' >"$WORK/occupied-port.log" 2>&1 &
+    occupied_port=$(_test_pick_port) || fail "could not allocate occupied-port fixture"
+    python3 -c 'import socket,sys,time; s=socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(("127.0.0.1", int(sys.argv[1]))); s.listen(); print("ready", flush=True); time.sleep(10)' "$occupied_port" >"$WORK/occupied-port.log" 2>&1 &
     occupied_pid=$!
     ready=0
     for _ in {1..50}; do
@@ -150,7 +168,7 @@ if command -v python3 >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
     printf 'http lifecycle payload\n' > "$WORK/http-payload.txt"
     OMNISH_TRANSFER_PORT_MIN=42000
     OMNISH_TRANSFER_PORT_MAX=42999
-    http_port=$(_transfer_random_port)
+    http_port=$(_test_pick_port) || fail "could not allocate HTTP lifecycle port"
     mkdir -p "$WORK/http-bin"
     real_python3=$(command -v python3)
     cat > "$WORK/http-bin/python3" <<'EOF'
@@ -260,7 +278,7 @@ fi
 # Ctrl+C must stop an active HTTP share, reap its server child and remove staging.
 if command -v python3 >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
     mkdir -p "$WORK/interrupt-root" "$WORK/interrupt-bin"
-    interrupt_port=$(_transfer_random_port)
+    interrupt_port=$(_test_pick_port) || fail "could not allocate interrupt-test port"
     real_python3=$(command -v python3)
     cat > "$WORK/interrupt-bin/python3" <<'EOF'
 #!/usr/bin/env bash
@@ -366,7 +384,7 @@ if command -v busybox >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
     ln -s "$busybox_path" "$WORK/busybox-bin/busybox"
     ln -s "$busybox_path" "$WORK/busybox-bin/sleep"
     printf 'busybox fallback payload\n' > "$WORK/busybox-stage/busybox-payload.txt"
-    busybox_port=43087
+    busybox_port=$(_test_pick_port) || fail "could not allocate BusyBox test port"
     PATH="$WORK/busybox-bin" /bin/bash -c '
         source "$1/lib/56-transfer.sh"
         _transfer_http_server "$2" "$3" 127.0.0.1
@@ -407,7 +425,7 @@ grep -Fq -- "$WORK/two.txt" "$WORK/croc.args" || fail "marked file two was not t
 # bind it but serve a response that does not contain this invocation's token.
 if command -v python3 >/dev/null 2>&1; then
     mkdir -p "$WORK/race-bin" "$WORK/race-stage"
-    race_port=49321
+    race_port=$(_test_pick_port) || fail "could not allocate readiness-race test port"
     real_python3=$(command -v python3)
     cat > "$WORK/race-bin/python3" <<'EOF'
 #!/usr/bin/env bash
