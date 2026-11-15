@@ -1,0 +1,71 @@
+name: Omnish Debian Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-deb:
+    if: startsWith(github.event.release.tag_name, 'v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the exact release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev
+
+      - name: Validate shell scripts
+        run: |
+          set -euo pipefail
+          bash -n packaging/deb/build.sh
+          bash -n packaging/deb/desktop-install.sh
+          bash -n packaging/deb/desktop-uninstall.sh
+
+      - name: Build Debian package
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          bash packaging/deb/build.sh "$VERSION" dist
+
+      - name: Smoke-test package and user-local installation
+        run: |
+          set -euo pipefail
+          package="dist/omnish_${GITHUB_REF_NAME#v}_all.deb"
+          dpkg-deb --info "$package"
+          dpkg-deb --contents "$package"
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          dpkg-deb --extract "$package" "$tmp/pkg"
+          test -x "$tmp/pkg/usr/bin/omnish-install"
+          test -x "$tmp/pkg/usr/bin/omnish-uninstall"
+          test -f "$tmp/pkg/usr/share/omnish-installer/assets/omnish-icon.svg"
+          mkdir -p "$tmp/home"
+          HOME="$tmp/home" XDG_DATA_HOME="$tmp/home/.local/share" \
+            bash "$tmp/pkg/usr/share/omnish-installer/install.sh"
+          test -L "$tmp/home/.local/bin/omnish"
+          test -f "$tmp/home/.local/share/omnish/omnish"
+          HOME="$tmp/home" "$tmp/home/.local/bin/omnish" --version
+          HOME="$tmp/home" XDG_DATA_HOME="$tmp/home/.local/share" \
+            bash "$tmp/pkg/usr/share/omnish-installer/desktop-install.sh"
+          test -f "$tmp/home/.local/share/applications/omnish.desktop"
+          test -f "$tmp/home/.local/share/icons/hicolor/scalable/apps/omnish.svg"
+          HOME="$tmp/home" XDG_DATA_HOME="$tmp/home/.local/share" \
+            bash "$tmp/pkg/usr/share/omnish-installer/uninstall.sh" --yes
+          HOME="$tmp/home" XDG_DATA_HOME="$tmp/home/.local/share" \
+            bash "$tmp/pkg/usr/share/omnish-installer/desktop-uninstall.sh"
+          test ! -e "$tmp/home/.local/share/applications/omnish.desktop"
+          test ! -e "$tmp/home/.local/share/icons/hicolor/scalable/apps/omnish.svg"
+
+      - name: Attach Debian package to this GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/*.deb --clobber
