@@ -27,6 +27,7 @@
 <p align="center">
   <a href="#-overview">Overview</a> ·
   <a href="#-features">Features</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
   <a href="#-quick-transfer">Quick Transfer</a> ·
   <a href="#-installation">Installation</a> ·
   <a href="#-keyboard-controls">Controls</a> ·
