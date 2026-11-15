@@ -4,7 +4,7 @@ All notable changes to Omnish are documented here.
 
 This project follows Semantic Versioning. The entries below summarize changes since the latest published release.
 
-## [1.1.0] - Unreleased
+## [3.0.0] - Unreleased
 
 ### Added
 - **Quick Archive:** create archives from selected files and browse archive contents without extracting them to disk.
