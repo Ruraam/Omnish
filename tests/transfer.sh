@@ -219,7 +219,7 @@ EOF
     export TEST_INTERRUPT_FILE="$WORK/http-payload.txt"
     export TEST_INTERRUPT_ROOT="$ROOT"
     export TEST_INTERRUPT_STAGE_ROOT="$WORK/interrupt-root"
-    python3 - <<'PY'
+    PATH="$WORK/interrupt-bin:$PATH" python3 - <<'PY'
 import os, signal, subprocess, time, urllib.request
 root = os.environ["TEST_INTERRUPT_ROOT"]
 port = os.environ["TEST_INTERRUPT_PORT"]
