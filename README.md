@@ -27,6 +27,8 @@
 <p align="center">
   <a href="#-overview">Overview</a> ·
   <a href="#-features">Features</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="#-quick-transfer">Quick Transfer</a> ·
   <a href="#-installation">Installation</a> ·
   <a href="#-keyboard-controls">Controls</a> ·
   <a href="#-configuration">Configuration</a> ·
@@ -240,6 +242,65 @@ omnish --help           # show command-line help
 
 Press **F2** in either backend (fzf also supports **Ctrl+Space**) to open the private Markdown scratchpad. It is stored at `$XDG_DATA_HOME/omnish/scratchpad.md` (default `~/.local/share/omnish/scratchpad.md`) with mode `0600`. Add notes and TODOs, paste clipboard contents (`wl-paste` → `xclip` → `xsel` → `termux-clipboard-get`), insert the currently selected path, or open the file in `$VISUAL` / `$EDITOR`. If no clipboard provider is available, paste is a harmless no-op.
 
+### Quick Transfer
+
+Quick Transfer sends the files you marked, or the currently selected file when nothing is marked. It is available in both the **fzf** and **loop** backends.
+
+#### 1. Select the files
+
+- In the **fzf** backend, use `Tab` / `Shift+Tab` or `Alt+A` to mark files.
+- In the **loop** backend, use `Space` or `Alt+A` to mark files.
+- To send only one file, simply highlight it and leave the mark list empty.
+- Quick Transfer accepts regular files only. Directories and symbolic links are not shared.
+
+Press **Ctrl+S**, then choose the transfer method. If files are marked, that marked set takes priority over the highlighted item.
+
+#### 2. Local HTTP (same-network sharing)
+
+Choose **Local HTTP** to start a temporary web server on a detected local IPv4 address.
+
+1. Omnish copies the selected files into a private temporary staging directory. Your original files are not moved or modified.
+2. It starts a temporary HTTP server using **Python 3**, or **BusyBox** if Python 3 is unavailable.
+3. Omnish displays a URL such as `http://192.168.1.20:45678/`. If `qrencode` is installed, it also displays an ANSI QR code in the terminal.
+4. On the receiving device, open the URL in a web browser connected to the same reachable network, then download the listed files.
+5. Return to the Omnish terminal and press **Ctrl+C** to stop sharing. The temporary staging directory is removed when the transfer session ends.
+
+The default HTTP port is selected from `40000–49999`. Advanced users can override the range with `OMNISH_TRANSFER_PORT_MIN` and `OMNISH_TRANSFER_PORT_MAX` in their environment; valid values must remain within `1024–65535`.
+
+**Security:** local HTTP has no authentication or encryption. Anyone who can reach the chosen address and port while the server is running can download the staged files. Use it only on a network you trust, do not expose or forward the port to the internet, and stop the server as soon as the transfer is complete. For untrusted networks, choose an encrypted transfer method instead.
+
+#### 3. Croc (encrypted transfer)
+
+If `croc` is installed, choose **croc (encrypted)**. Omnish starts `croc send` for the selected files and displays the one-time transfer code in the terminal.
+
+On the receiving device, install Croc and run:
+
+```bash
+croc <transfer-code>
+```
+
+Enter the code exactly as displayed by the sender. Keep it private: anyone who obtains the code may be able to join the transfer.
+
+#### 4. Magic Wormhole
+
+If the `wormhole` command is installed, choose **Magic Wormhole**. Omnish runs `wormhole send` with the selected files. Follow the code and prompts shown by Magic Wormhole.
+
+On the receiving device, install Magic Wormhole and run:
+
+```bash
+wormhole receive
+```
+
+Enter the one-time code displayed by the sender when prompted.
+
+#### Troubleshooting
+
+- **No transfer method appears:** install Python 3 or BusyBox for local HTTP, `croc` for Croc, or the Magic Wormhole package that provides the `wormhole` command.
+- **The URL does not open on the receiving device:** confirm both devices can reach each other on the same network, check the displayed IP address, and verify that the host firewall allows the selected TCP port.
+- **Local HTTP cannot start:** make sure Python 3 or BusyBox is installed and that the selected port is not blocked or already in use.
+- **No QR code is shown:** this is normal when `qrencode` is not installed; the URL is still printed.
+- **A file is rejected:** Quick Transfer deliberately shares regular files only. Select the actual file rather than a directory or symbolic link.
+
 ### Keyboard controls
 
 | Key | Action |
@@ -390,6 +451,7 @@ omnish/
 │   ├── 46-cpu-monitor.sh     # CPU monitor and stress test
 │   ├── 50-fileops.sh         # file operations
 │   ├── 55-archive.sh         # Quick Archive compression + virtual browsing
+│   ├── 56-transfer.sh        # Quick Transfer (local HTTP, Croc and Wormhole)
 │   ├── 60-trash.sh           # reversible deletion
 │   ├── 70-fzf.sh             # fzf interaction backend
 │   ├── 70-loop.sh            # pure-Bash interaction backend
@@ -436,6 +498,9 @@ bash tests/regression.sh
 bash tests/archive_real_formats.sh
 bash tests/archive_security.sh
 
+# Quick Transfer integration tests (Python 3; BusyBox fallback is covered when available)
+bash tests/transfer.sh
+
 # Installer integration tests
 bash tests/install.sh
 
@@ -443,7 +508,7 @@ bash tests/install.sh
 python3 tests/pty_integration.py
 ```
 
-GitHub Actions runs the syntax, ShellCheck, regression, installer and PTY checks on pushes and pull requests.
+GitHub Actions runs the syntax, ShellCheck, regression, installer, PTY, Quick Archive and Quick Transfer integration checks on pushes and pull requests.
 
 ---
 
