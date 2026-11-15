@@ -269,8 +269,7 @@ Quick Transfer sends the files you marked, or the currently selected file when n
 
 #### 1. Select the files
 
-- In the **fzf** backend, use `Tab` / `Shift+Tab` or `Alt+A` to mark files.
-- In the **loop** backend, use `Space` or `Alt+A` to mark files.
+- In either backend, use `Tab` / `Shift+Tab` to mark the current item and move, or `Space` / `Alt+A` to toggle its mark.
 - To send only one file, simply highlight it and leave the mark list empty.
 - Quick Transfer accepts regular files only. Directories and symbolic links are not shared.
 
@@ -331,7 +330,7 @@ Enter the one-time code displayed by the sender when prompted.
 | `←` / `h` / `Backspace` | Go to parent directory |
 | `g` / `G` | Jump to top / bottom |
 | `Tab` / `Shift+Tab` | Mark item and move down / up |
-| `Space` | Toggle mark (loop backend) |
+| `Space` | Toggle mark (both backends) |
 | `Alt+A` | Toggle mark |
 | `Alt+X` | Mark all in current directory |
 | `Ctrl+A` | Toggle all marks |
@@ -342,6 +341,8 @@ Enter the one-time code displayed by the sender when prompted.
 | `Ctrl+S` | Quick Transfer: local HTTP or optional croc / Magic Wormhole |
 | `Alt+S` / `r` | Create symlink / rename |
 | `Ctrl+O` | Open with MIME handler |
+| `Ctrl+U` | Open disk usage explorer |
+| `Ctrl+X` | Open system console |
 | `p` / `x` / `X` | Paste marks / inspect / toggle executable |
 | `Z` | Quick Archive: compress marked files (`.tar.gz`, `.tar.zst`, `.zip`) with a size estimate |
 | `Enter` on archive | Browse `.tar.*`, `.zip`, `.deb`, `.apk`, ULPM v5 SquashFS `.lpk`, and (with `bsdtar`) RAR, 7z, ISO, CAB and AR without extracting |
@@ -349,10 +350,14 @@ Enter the one-time code displayed by the sender when prompted.
 | `Alt+H` | Toggle hidden files |
 | `Alt+L` | Toggle long listing |
 | `Ctrl+G` | Search recursively (ripgrep) |
-| `F1` / `?` | Help |
+| `F1` / `?` | Help (fzf backend) |
+| `Ctrl+H` | Toggle inline help (loop backend); show help pane (fzf backend) |
 | `F2` | Open private Markdown scratchpad (both backends) |
 | `Ctrl+Space` | Open scratchpad (fzf backend) |
-| `Esc` / `Ctrl+Q` | Quit |
+| `Esc` | Quit (both backends) |
+| `q` | Quit (loop backend) |
+| `Ctrl+Q` | Quit (fzf backend) |
+| `Ctrl+C` | Interrupt / quit (both backends) |
 
 ### Disk usage panel
 
