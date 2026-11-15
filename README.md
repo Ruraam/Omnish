@@ -350,15 +350,14 @@ Enter the one-time code displayed by the sender when prompted.
 | `Alt+H` | Toggle hidden files |
 | `Alt+L` | Toggle long listing |
 | `Ctrl+G` | Search recursively (ripgrep) |
-| `Ctrl+U` | Open disk usage explorer |
-| `Ctrl+X` | Open system console |
 | `F1` / `?` | Help (fzf backend) |
 | `Ctrl+H` | Toggle inline help (loop backend); show help pane (fzf backend) |
 | `F2` | Open private Markdown scratchpad (both backends) |
 | `Ctrl+Space` | Open scratchpad (fzf backend) |
 | `Esc` | Quit (both backends) |
 | `q` | Quit (loop backend) |
-| `Ctrl+Q` / `Ctrl+C` | Quit (fzf backend) |
+| `Ctrl+Q` | Quit (fzf backend) |
+| `Ctrl+C` | Interrupt / quit (both backends) |
 
 ### Disk usage panel
 
