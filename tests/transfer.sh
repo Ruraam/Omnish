@@ -151,11 +151,22 @@ if command -v python3 >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
     OMNISH_TRANSFER_PORT_MIN=42000
     OMNISH_TRANSFER_PORT_MAX=42999
     http_port=$(_transfer_random_port)
+    mkdir -p "$WORK/http-bin"
+    real_python3=$(command -v python3)
+    cat > "$WORK/http-bin/python3" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "-m" && "${2:-}" == "http.server" ]]; then
+    printf '%s\\n' "$" > "$TEST_HTTP_CHILD_PID"
+fi
+exec "$REAL_PYTHON3" "$@"
+EOF
+    chmod +x "$WORK/http-bin/python3"
     export TMP_OMNISH_DIR="$WORK/tmp-root" TEST_HTTP_PORT="$http_port" TEST_HTTP_FILE="$WORK/http-payload.txt"
-    bash -c '
+    export TEST_HTTP_CHILD_PID="$WORK/http-child.pid" REAL_PYTHON3="$real_python3"
+    PATH="$WORK/http-bin:$PATH" bash -c '
         source "$1/lib/56-transfer.sh"
-_transfer_local_ip() { echo 127.0.0.1; }
-_transfer_random_port() { echo "$TEST_HTTP_PORT"; }
+        _transfer_local_ip() { echo 127.0.0.1; }
+        _transfer_random_port() { echo "$TEST_HTTP_PORT"; }
         _transfer_http "$TEST_HTTP_FILE"
     ' _ "$ROOT" >"$WORK/http-server.log" 2>&1 &
     http_pid=$!
@@ -171,9 +182,15 @@ _transfer_random_port() { echo "$TEST_HTTP_PORT"; }
     done
     (( ready )) || { cat "$WORK/http-server.log" >&2; fail "HTTP server did not serve staged file"; }
     cmp -s "$WORK/http-payload.txt" "$WORK/http-download.txt" || fail "HTTP download content mismatch"
+    [[ -s "$TEST_HTTP_CHILD_PID" ]] || fail "HTTP server child PID was not recorded"
+    http_child_pid=$(cat "$TEST_HTTP_CHILD_PID")
+    [[ "$http_child_pid" =~ ^[0-9]+$ ]] || fail "HTTP server child PID is invalid"
 
     kill -TERM "$http_pid"
     wait "$http_pid" || :
+    if kill -0 "$http_child_pid" 2>/dev/null; then
+        fail "HTTP server child process survived parent SIGTERM"
+    fi
     [[ -z "$(find "$WORK/tmp-root" -mindepth 1 -maxdepth 1 -name 'omnish-transfer.*' -print -quit)" ]] || fail "staging directory leaked after SIGTERM"
     if curl --fail --silent --max-time 1 "http://127.0.0.1:$http_port/" >/dev/null; then
         fail "HTTP server remained reachable after shutdown"
