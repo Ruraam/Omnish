@@ -84,7 +84,7 @@ _transfer_stage_files() {
         [[ -f "$src" && ! -L "$src" ]] || { _transfer_err "only regular files can be shared: $src"; return 1; }
         base=$(basename -- "$src")
         dest="$stage/$base"
-        while [[ -e "$dest" ]]; do dest="$stage/$n-$base"; ((n+=1)); done
+        while [[ -e "$dest" || -L "$dest" ]]; do dest="$stage/$n-$base"; ((n+=1)); done
         if ln -- "$src" "$dest" 2>/dev/null; then :; else cp -- "$src" "$dest" || return 1; fi
     done
 }
