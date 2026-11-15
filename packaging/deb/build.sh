@@ -58,6 +58,10 @@ if [ "$(id -u)" -eq 0 ]; then
 fi
 payload=/usr/share/omnish-installer
 /usr/bin/env bash "$payload/uninstall.sh" "$@"
+# Preserve the menu entry when the user cancels or requests a dry run.
+if [ -e "$HOME/.local/bin/omnish" ] || [ -L "$HOME/.local/bin/omnish" ] || [ -d "$HOME/.local/share/omnish" ]; then
+    exit 0
+fi
 /usr/bin/env bash "$payload/desktop-uninstall.sh"
 EOF
 chmod 0755 "$PKG/usr/bin/omnish-install" "$PKG/usr/bin/omnish-uninstall"
