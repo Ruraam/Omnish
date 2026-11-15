@@ -207,7 +207,7 @@ if command -v python3 >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
     cat > "$WORK/interrupt-bin/python3" <<'EOF'
 #!/usr/bin/env bash
 if [[ "${1:-}" == "-m" && "${2:-}" == "http.server" ]]; then
-    printf '%s\\n' "$BASHPID" > "$TEST_INTERRUPT_CHILD_PID"
+    printf '%s\n' "$BASHPID" > "$TEST_INTERRUPT_CHILD_PID"
 fi
 exec "$REAL_PYTHON3" "$@"
 EOF
