@@ -199,6 +199,64 @@ fi
 
 printf 'DEBUG: Python HTTP test passed\n' >&2
 
+# Ctrl+C during server startup must prevent a late listener and clean staging.
+if command -v python3 >/dev/null 2>&1; then
+    mkdir -p "$WORK/startup-root" "$WORK/startup-bin"
+    startup_port=$(_transfer_random_port)
+    real_python3=$(command -v python3)
+    cat > "$WORK/startup-bin/python3" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "-m" && "${2:-}" == "http.server" ]]; then
+    printf '%s\n' "$BASHPID" > "$TEST_STARTUP_CHILD_PID"
+    exec /bin/sleep 5
+fi
+exec "$REAL_PYTHON3" "$@"
+EOF
+    chmod +x "$WORK/startup-bin/python3"
+    export TMP_OMNISH_DIR="$WORK/startup-root"
+    export TEST_STARTUP_CHILD_PID="$WORK/startup-child.pid"
+    export REAL_PYTHON3="$real_python3"
+    export TEST_STARTUP_PORT="$startup_port"
+    export TEST_STARTUP_FILE="$WORK/http-payload.txt"
+    export TEST_STARTUP_ROOT="$ROOT"
+    export TEST_STARTUP_STAGE_ROOT="$WORK/startup-root"
+    PATH="$WORK/startup-bin:$PATH" python3 - <<'PY'
+import os, signal, subprocess, time
+root = os.environ["TEST_STARTUP_ROOT"]
+env = os.environ.copy()
+script = 'source "$1/lib/56-transfer.sh"; _transfer_local_ip(){ echo 127.0.0.1; }; _transfer_random_port(){ echo "$TEST_STARTUP_PORT"; }; _transfer_http "$TEST_STARTUP_FILE"'
+proc = subprocess.Popen(["/bin/bash", "-c", script, "_", root], env=env, start_new_session=True)
+try:
+    pid_file = os.environ["TEST_STARTUP_CHILD_PID"]
+    deadline = time.monotonic() + 5
+    while not os.path.isfile(pid_file) and time.monotonic() < deadline:
+        if proc.poll() is not None:
+            raise SystemExit(f"FAIL: startup share exited early with {proc.returncode}")
+        time.sleep(0.02)
+    if not os.path.isfile(pid_file):
+        raise SystemExit("FAIL: startup test did not observe server child launch")
+    child_pid = int(open(pid_file, encoding="ascii").read().strip())
+    os.killpg(proc.pid, signal.SIGINT)
+    rc = proc.wait(timeout=5)
+    if rc != 130:
+        raise SystemExit(f"FAIL: startup Ctrl+C returned {rc}, expected 130")
+    try:
+        with open(f"/proc/{child_pid}/stat", encoding="ascii") as stat_file:
+            child_state = stat_file.read().split(") ", 1)[1].split()[0]
+    except FileNotFoundError:
+        child_state = None
+    if child_state not in (None, "Z", "X"):
+        raise SystemExit(f"FAIL: startup server child remains active (state {child_state})")
+    if os.listdir(os.environ["TEST_STARTUP_STAGE_ROOT"]):
+        raise SystemExit("FAIL: startup staging directory leaked after Ctrl+C")
+except BaseException:
+    if proc.poll() is None:
+        proc.kill()
+        proc.wait()
+    raise
+PY
+fi
+
 # Ctrl+C must stop an active HTTP share, reap its server child and remove staging.
 if command -v python3 >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
     mkdir -p "$WORK/interrupt-root" "$WORK/interrupt-bin"
