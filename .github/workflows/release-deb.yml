@@ -29,6 +29,7 @@ jobs:
           bash -n packaging/deb/build.sh
           bash -n packaging/deb/desktop-install.sh
           bash -n packaging/deb/desktop-uninstall.sh
+          bash -n packaging/deb/test.sh
 
       - name: Build Debian package
         run: |
@@ -36,36 +37,8 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           bash packaging/deb/build.sh "$VERSION" dist
 
-      - name: Smoke-test package and user-local installation
-        run: |
-          set -euo pipefail
-          package="dist/omnish_${GITHUB_REF_NAME#v}_all.deb"
-          dpkg-deb --info "$package"
-          dpkg-deb --contents "$package"
-          tmp="$(mktemp -d)"
-          trap 'rm -rf "$tmp"' EXIT
-          dpkg-deb --extract "$package" "$tmp/pkg"
-          test -x "$tmp/pkg/usr/bin/omnish-install"
-          test -x "$tmp/pkg/usr/bin/omnish-uninstall"
-          test -f "$tmp/pkg/usr/share/omnish-installer/assets/omnish-icon.svg"
-          mkdir -p "$tmp/home"
-          HOME="$tmp/home" XDG_DATA_HOME="$tmp/home/.local/share" \
-            bash "$tmp/pkg/usr/share/omnish-installer/install.sh"
-          test -L "$tmp/home/.local/bin/omnish"
-          grep -Fq "# >>> omnish PATH >>>" "$tmp/home/.bashrc"
-          test -f "$tmp/home/.local/share/omnish/omnish"
-          HOME="$tmp/home" "$tmp/home/.local/bin/omnish" --version
-          HOME="$tmp/home" XDG_DATA_HOME="$tmp/home/.local/share" \
-            bash "$tmp/pkg/usr/share/omnish-installer/desktop-install.sh"
-          test -f "$tmp/home/.local/share/applications/omnish.desktop"
-          test -f "$tmp/home/.local/share/icons/hicolor/scalable/apps/omnish.svg"
-          HOME="$tmp/home" XDG_DATA_HOME="$tmp/home/.local/share" \
-            bash "$tmp/pkg/usr/share/omnish-installer/uninstall.sh" --yes
-          HOME="$tmp/home" XDG_DATA_HOME="$tmp/home/.local/share" \
-            bash "$tmp/pkg/usr/share/omnish-installer/desktop-uninstall.sh"
-          test ! -e "$tmp/home/.local/share/applications/omnish.desktop"
-          ! grep -Fq "# >>> omnish PATH >>>" "$tmp/home/.bashrc"
-          test ! -e "$tmp/home/.local/share/icons/hicolor/scalable/apps/omnish.svg"
+      - name: End-to-end Debian package test
+        run: bash packaging/deb/test.sh "dist/omnish_${GITHUB_REF_NAME#v}_all.deb"
 
       - name: Attach Debian package to this GitHub Release
         env:
