@@ -69,14 +69,14 @@ _transfer_stage_files "$WORK/stage" "$WORK/one.txt" "$WORK/two.txt"
 
 # Files with identical basenames must remain distinct and retain their contents.
 mkdir -p "$WORK/source-a" "$WORK/source-b"
-printf 'collision A\\n' > "$WORK/source-a/report.txt"
-printf 'collision B\\n' > "$WORK/source-b/report.txt"
+printf 'collision A\n' > "$WORK/source-a/report.txt"
+printf 'collision B\n' > "$WORK/source-b/report.txt"
 _transfer_stage_files "$WORK/stage" "$WORK/source-a/report.txt" "$WORK/source-b/report.txt"
 [[ "$(cat "$WORK/stage/report.txt")" == "collision A" ]] || fail "first duplicate-basename file was overwritten"
 [[ "$(cat "$WORK/stage/1-report.txt")" == "collision B" ]] || fail "second duplicate-basename file was not renamed safely"
 
 # Shell metacharacters, spaces and leading dashes must be treated as filename data.
-printf 'special filename\\n' > "$WORK/- report [1].txt"
+printf 'special filename\n' > "$WORK/- report [1].txt"
 _transfer_stage_files "$WORK/stage" "$WORK/- report [1].txt"
 [[ "$(cat "$WORK/stage/- report [1].txt")" == "special filename" ]] || fail "special-character filename was not staged intact"
 if _transfer_stage_files "$WORK/stage" "$WORK/missing.txt"; then fail "missing file was accepted"; fi
