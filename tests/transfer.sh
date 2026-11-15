@@ -67,6 +67,12 @@ _transfer_stage_files "$WORK/stage" "$WORK/one.txt" "$WORK/two.txt"
 [[ "$(cat "$WORK/stage/one.txt")" == one ]] || fail "staged first file mismatch"
 [[ "$(cat "$WORK/stage/two.txt")" == two ]] || fail "staged second file mismatch"
 
+# Staged payloads must be independent snapshots, not hard links to originals.
+printf 'original snapshot\n' > "$WORK/snapshot.txt"
+_transfer_stage_files "$WORK/stage" "$WORK/snapshot.txt"
+printf 'changed after staging\n' > "$WORK/snapshot.txt"
+[[ "$(cat "$WORK/stage/snapshot.txt")" == "original snapshot" ]] || fail "staged payload changed with its source file"
+
 # Files with identical basenames must remain distinct and retain their contents.
 mkdir -p "$WORK/source-a" "$WORK/source-b"
 printf 'collision A\n' > "$WORK/source-a/report.txt"
