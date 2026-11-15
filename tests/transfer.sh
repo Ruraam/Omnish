@@ -225,7 +225,7 @@ root = os.environ["TEST_INTERRUPT_ROOT"]
 port = os.environ["TEST_INTERRUPT_PORT"]
 env = os.environ.copy()
 script = 'source "$1/lib/56-transfer.sh"; _transfer_local_ip(){ echo 127.0.0.1; }; _transfer_random_port(){ echo "$TEST_INTERRUPT_PORT"; }; _transfer_http "$TEST_INTERRUPT_FILE"'
-proc = subprocess.Popen(["/bin/bash", "-c", script, "_", root], env=env)
+proc = subprocess.Popen(["/bin/bash", "-c", script, "_", root], env=env, start_new_session=True)
 try:
     url = f"http://127.0.0.1:{port}/http-payload.txt"
     deadline = time.monotonic() + 8
@@ -248,7 +248,7 @@ try:
     if not os.path.isfile(pid_file):
         raise SystemExit("FAIL: Ctrl+C test could not capture server child PID")
     child_pid = int(open(pid_file, encoding="ascii").read().strip())
-    os.kill(proc.pid, signal.SIGINT)
+    os.killpg(proc.pid, signal.SIGINT)
     rc = proc.wait(timeout=5)
     if rc != 130:
         raise SystemExit(f"FAIL: Ctrl+C returned {rc}, expected 130")
