@@ -199,6 +199,75 @@ fi
 
 printf 'DEBUG: Python HTTP test passed\n' >&2
 
+# Ctrl+C must stop an active HTTP share, reap its server child and remove staging.
+if command -v python3 >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
+    mkdir -p "$WORK/interrupt-root" "$WORK/interrupt-bin"
+    interrupt_port=$(_transfer_random_port)
+    real_python3=$(command -v python3)
+    cat > "$WORK/interrupt-bin/python3" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "-m" && "${2:-}" == "http.server" ]]; then
+    printf '%s\\n' "$BASHPID" > "$TEST_INTERRUPT_CHILD_PID"
+fi
+exec "$REAL_PYTHON3" "$@"
+EOF
+    chmod +x "$WORK/interrupt-bin/python3"
+    export TMP_OMNISH_DIR="$WORK/interrupt-root"
+    export TEST_INTERRUPT_CHILD_PID="$WORK/interrupt-child.pid"
+    export REAL_PYTHON3="$real_python3"
+    export TEST_INTERRUPT_PORT="$interrupt_port"
+    export TEST_INTERRUPT_FILE="$WORK/http-payload.txt"
+    export TEST_INTERRUPT_ROOT="$ROOT"
+    export TEST_INTERRUPT_STAGE_ROOT="$WORK/interrupt-root"
+    python3 - <<'PY'
+import os, signal, subprocess, time, urllib.request
+root = os.environ["TEST_INTERRUPT_ROOT"]
+port = os.environ["TEST_INTERRUPT_PORT"]
+env = os.environ.copy()
+script = 'source "$1/lib/56-transfer.sh"; _transfer_local_ip(){ echo 127.0.0.1; }; _transfer_random_port(){ echo "$TEST_INTERRUPT_PORT"; }; _transfer_http "$TEST_INTERRUPT_FILE"'
+proc = subprocess.Popen(["/bin/bash", "-c", script, "_", root], env=env)
+try:
+    url = f"http://127.0.0.1:{port}/http-payload.txt"
+    deadline = time.monotonic() + 8
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=0.3) as response:
+                if response.read() != b"http lifecycle payload\\n":
+                    raise SystemExit("FAIL: Ctrl+C fixture served incorrect content")
+            break
+        except Exception:
+            if proc.poll() is not None:
+                raise SystemExit(f"FAIL: HTTP share exited early with {proc.returncode}")
+            time.sleep(0.05)
+    else:
+        raise SystemExit("FAIL: HTTP share did not become ready for Ctrl+C test")
+    pid_file = os.environ["TEST_INTERRUPT_CHILD_PID"]
+    deadline = time.monotonic() + 2
+    while not os.path.isfile(pid_file) and time.monotonic() < deadline:
+        time.sleep(0.02)
+    if not os.path.isfile(pid_file):
+        raise SystemExit("FAIL: Ctrl+C test could not capture server child PID")
+    child_pid = int(open(pid_file, encoding="ascii").read().strip())
+    os.kill(proc.pid, signal.SIGINT)
+    rc = proc.wait(timeout=5)
+    if rc != 130:
+        raise SystemExit(f"FAIL: Ctrl+C returned {rc}, expected 130")
+    try:
+        os.kill(child_pid, 0)
+    except ProcessLookupError:
+        pass
+    else:
+        raise SystemExit("FAIL: HTTP server child survived Ctrl+C")
+    if os.listdir(os.environ["TEST_INTERRUPT_STAGE_ROOT"]):
+        raise SystemExit("FAIL: staging directory leaked after Ctrl+C")
+except BaseException:
+    if proc.poll() is None:
+        proc.kill()
+        proc.wait()
+    raise
+PY
+fi
+
 # Early failures must clean staging and restore signal handlers installed by
 # the caller, rather than leaking shell state from Quick Transfer.
 mkdir -p "$WORK/early-cleanup-root"
