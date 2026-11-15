@@ -30,7 +30,8 @@ NAVIGATION
   ↑/↓              Move selection         Tab/⇧Tab    Multi-select + move
   Enter/→          Open / descend         ←/h/⌫       Go up one level
   g / G            Top / bottom           F5 / ^R     Refresh listing
-  F1 / ?           This help              Esc/^Q/^C   Quit (loop: q|Esc)
+  F1 / ?           Help (fzf)             ^H          Help (loop: inline; fzf: pane)
+  Esc              Quit (both)            q           Quit (loop; fzf: Esc/^Q/^C)
   F2                Open Scratchpad (fzf also supports Ctrl+Space)
   Z                 Quick Archive: compress marked items (tar.gz / tar.zst / zip)
   Enter on archive  Browse TAR/ZIP/DEB/APK/LPK; RAR/7z/ISO/CAB/AR via bsdtar
@@ -50,7 +51,7 @@ FILE OPERATIONS
 
 MARKING
   Tab / Shift-Tab     Select + move down/up
-  Space               Toggle mark on current (loop backend)
+  Space               Toggle mark on current (both backends)
   alt-a               Toggle mark on current (both backends)
   alt-x               Mark all in current dir
   ^a                  Toggle-all in current dir
