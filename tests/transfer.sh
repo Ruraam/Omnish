@@ -28,10 +28,10 @@ lan_ip=$(PATH="$WORK/mock-ip:$PATH" _transfer_local_ip) || fail "LAN address det
 cat > "$WORK/mock-ip/ip" <<'EOF'
 #!/usr/bin/env bash
 if [[ "$*" == "-4 route get 1.1.1.1" ]]; then
-    printf '%s\\n' '1.1.1.1 dev eth0 src 203.0.113.10 uid 1000'
+    printf '%s\n' '1.1.1.1 dev eth0 src 203.0.113.10 uid 1000'
 elif [[ "$*" == "-o -4 addr show scope global" ]]; then
-    printf '%s\\n' '2: eth0 inet 203.0.113.10/24 scope global eth0'
-    printf '%s\\n' '3: wlan0 inet 192.168.1.44/24 scope global wlan0'
+    printf '%s\n' '2: eth0 inet 203.0.113.10/24 scope global eth0'
+    printf '%s\n' '3: wlan0 inet 192.168.1.44/24 scope global wlan0'
 fi
 EOF
 lan_ip=$(PATH="$WORK/mock-ip:$PATH" _transfer_local_ip) || fail "multi-interface address detection failed"
@@ -41,7 +41,7 @@ lan_ip=$(PATH="$WORK/mock-ip:$PATH" _transfer_local_ip) || fail "multi-interface
 cat > "$WORK/mock-ip/ip" <<'EOF'
 #!/usr/bin/env bash
 if [[ "$*" == "-4 route get 1.1.1.1" ]]; then
-    printf '%s\\n' '1.1.1.1 dev wg0 src 10.7.0.2 uid 1000'
+    printf '%s\n' '1.1.1.1 dev wg0 src 10.7.0.2 uid 1000'
 fi
 EOF
 if PATH="$WORK/mock-ip:$PATH" _transfer_local_ip >/dev/null; then
@@ -99,7 +99,7 @@ if command -v python3 >/dev/null 2>&1; then
     (( ready )) || { cat "$WORK/occupied-port.log" >&2; fail "could not start occupied-port fixture"; }
     printf 'DEBUG: occupied fixture ready\n' >&2
     # Capture the diagnostic instead of allowing _transfer_err to write to /dev/tty.
-    _transfer_err() { printf 'omnish transfer: %s\\n' "$*" >&2; }
+    _transfer_err() { printf 'omnish transfer: %s\n' "$*" >&2; }
     if _transfer_http_server "$WORK/stage" "$occupied_port" 127.0.0.1 >"$WORK/occupied-server.log" 2>&1; then
         kill "$occupied_pid" 2>/dev/null || :
         wait "$occupied_pid" 2>/dev/null || :
@@ -107,7 +107,7 @@ if command -v python3 >/dev/null 2>&1; then
     else
         server_rc=$?
     fi
-    printf 'DEBUG: occupied server returned %s\\n' "$server_rc" >&2
+    printf 'DEBUG: occupied server returned %s\n' "$server_rc" >&2
     grep -Fq "TCP port $occupied_port is already in use" "$WORK/occupied-server.log" || { cat "$WORK/occupied-server.log" >&2; fail "occupied-port rejection did not explain the collision"; }
     printf 'DEBUG: occupied rejection message verified\n' >&2
     kill "$occupied_pid" 2>/dev/null || :
