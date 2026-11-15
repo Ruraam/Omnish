@@ -182,6 +182,38 @@ fi
 
 printf 'DEBUG: Python HTTP test passed\n' >&2
 
+# Early failures must clean staging and restore signal handlers installed by
+# the caller, rather than leaking shell state from Quick Transfer.
+mkdir -p "$WORK/early-cleanup-root"
+TMP_OMNISH_DIR="$WORK/early-cleanup-root" bash -c '
+    source "$1/lib/56-transfer.sh"
+    trap ":" INT
+    trap ":" TERM
+    before_int=$(trap -p INT)
+    before_term=$(trap -p TERM)
+    _transfer_local_ip() { return 1; }
+    if _transfer_http "$2"; then exit 10; fi
+    [[ "$(trap -p INT)" == "$before_int" ]] || exit 11
+    [[ "$(trap -p TERM)" == "$before_term" ]] || exit 12
+' _ "$ROOT" "$WORK/one.txt" || fail "early HTTP failure did not restore caller traps"
+[[ -z "$(find "$WORK/early-cleanup-root" -mindepth 1 -maxdepth 1 -print -quit)" ]] || fail "staging directory leaked after early HTTP failure"
+
+# A signal during staging (before server startup) must still remove the
+# private directory and must not proceed to network discovery.
+mkdir -p "$WORK/signal-cleanup-root"
+set +e
+TMP_OMNISH_DIR="$WORK/signal-cleanup-root" bash -c '
+    source "$1/lib/56-transfer.sh"
+    _transfer_stage_files() { kill -TERM "$BASHPID"; return 0; }
+    _transfer_local_ip() { echo "must-not-run" >&2; return 1; }
+    _transfer_http "$2"
+' _ "$ROOT" "$WORK/one.txt" >"$WORK/early-signal.log" 2>&1
+early_signal_rc=$?
+set -e
+(( early_signal_rc == 143 )) || { cat "$WORK/early-signal.log" >&2; fail "early SIGTERM returned $early_signal_rc instead of 143"; }
+! grep -q 'must-not-run' "$WORK/early-signal.log" || fail "network discovery ran after early SIGTERM"
+[[ -z "$(find "$WORK/signal-cleanup-root" -mindepth 1 -maxdepth 1 -print -quit)" ]] || fail "staging directory leaked after early SIGTERM"
+
 # Exercise the BusyBox httpd fallback with Python deliberately hidden from PATH.
 if command -v busybox >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
     mkdir -p "$WORK/busybox-bin" "$WORK/busybox-stage"
