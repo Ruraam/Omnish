@@ -79,6 +79,13 @@ _transfer_stage_files "$WORK/stage" "$WORK/source-a/report.txt" "$WORK/source-b/
 printf 'special filename\n' > "$WORK/- report [1].txt"
 _transfer_stage_files "$WORK/stage" "$WORK/- report [1].txt"
 [[ "$(cat "$WORK/stage/- report [1].txt")" == "special filename" ]] || fail "special-character filename was not staged intact"
+# A dangling destination symlink must count as occupied; never follow it outside staging.
+printf 'outside sentinel\\n' > "$WORK/outside-sentinel.txt"
+ln -s "$WORK/outside-sentinel.txt.missing" "$WORK/stage/dangling.txt"
+printf 'safe staged payload\\n' > "$WORK/dangling.txt"
+_transfer_stage_files "$WORK/stage" "$WORK/dangling.txt"
+[[ "$(cat "$WORK/outside-sentinel.txt")" == "outside sentinel" ]] || fail "staging modified a file outside its directory"
+[[ "$(cat "$WORK/stage/1-dangling.txt")" == "safe staged payload" ]] || fail "dangling symlink collision was not safely renamed"
 if _transfer_stage_files "$WORK/stage" "$WORK/missing.txt"; then fail "missing file was accepted"; fi
 ln -s "$WORK/one.txt" "$WORK/link.txt"
 if _transfer_stage_files "$WORK/stage" "$WORK/link.txt"; then fail "symlink was accepted"; fi
