@@ -401,4 +401,50 @@ PATH="$WORK/bin:$PATH" quick_transfer "$WORK/missing.txt"
 grep -Fq -- "$WORK/one.txt" "$WORK/croc.args" || fail "marked file one was not transferred"
 grep -Fq -- "$WORK/two.txt" "$WORK/croc.args" || fail "marked file two was not transferred"
 
+
+# A competing listener that wins after the preflight must never be advertised.
+# Force the preflight to report a free port, then make the spawned "server"
+# bind it but serve a response that does not contain this invocation's token.
+if command -v python3 >/dev/null 2>&1; then
+    mkdir -p "$WORK/race-bin" "$WORK/race-stage"
+    race_port=49321
+    real_python3=$(command -v python3)
+    cat > "$WORK/race-bin/python3" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "-m" && "${2:-}" == "http.server" ]]; then
+    exec "$REAL_PYTHON3" -c '
+import sys
+from http.server import BaseHTTPRequestHandler, HTTPServer
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        body = b"not the Omnish readiness token"
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+    def log_message(self, *_args):
+        pass
+HTTPServer(("127.0.0.1", int(sys.argv[1])), Handler).serve_forever()
+' "$3"
+fi
+exec "$REAL_PYTHON3" "$@"
+EOF
+    chmod +x "$WORK/race-bin/python3"
+    printf 'race fixture payload\n' > "$WORK/race-stage/payload.txt"
+    export REAL_PYTHON3="$real_python3"
+    if PATH="$WORK/race-bin:$PATH" bash -c '
+        source "$1/lib/56-transfer.sh"
+        _transfer_port_in_use() { return 1; }
+        _transfer_http_server "$2" "$3" 127.0.0.1
+    ' _ "$ROOT" "$WORK/race-stage" "$race_port" >"$WORK/race-server.log" 2>&1; then
+        fail "Quick Transfer accepted a competing listener without its readiness token"
+    fi
+    grep -Fq "HTTP server did not serve its readiness probe" "$WORK/race-server.log" || {
+        cat "$WORK/race-server.log" >&2
+        fail "readiness-token race was not rejected for the expected reason"
+    }
+    ! grep -Fq "Open on your phone" "$WORK/race-server.log" || fail "foreign listener URL was advertised"
+    [[ -z "$(find "$WORK/race-stage" -maxdepth 1 -name '.omnish-ready-*' -print -quit)" ]] || fail "readiness probe file leaked after race rejection"
+fi
+
 echo 'PASS: Quick Transfer staging, port bounds and optional backend dispatch.'
