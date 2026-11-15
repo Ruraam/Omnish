@@ -253,11 +253,12 @@ try:
     if rc != 130:
         raise SystemExit(f"FAIL: Ctrl+C returned {rc}, expected 130")
     try:
-        os.kill(child_pid, 0)
-    except ProcessLookupError:
-        pass
-    else:
-        raise SystemExit("FAIL: HTTP server child survived Ctrl+C")
+        with open(f"/proc/{child_pid}/stat", encoding="ascii") as stat_file:
+            child_state = stat_file.read().split(") ", 1)[1].split()[0]
+    except FileNotFoundError:
+        child_state = None
+    if child_state not in (None, "Z", "X"):
+        raise SystemExit(f"FAIL: HTTP server child is still active after Ctrl+C (state {child_state})")
     if os.listdir(os.environ["TEST_INTERRUPT_STAGE_ROOT"]):
         raise SystemExit("FAIL: staging directory leaked after Ctrl+C")
 except BaseException:
