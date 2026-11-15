@@ -162,27 +162,64 @@ _transfer_http_server() {
         return 0
     fi
 
-    # Wait for a real TCP listener, not merely a live PID (which can be a
-    # server that has already failed to bind because the port is occupied).
+    # Probe for a file containing a per-invocation token. A TCP connect
+    # alone is insufficient: another process may win the bind race after the
+    # preflight check and make us advertise someone else's listener.
+    local probe_file=".omnish-ready-${BASHPID}-${RANDOM}-${RANDOM}"
+    local probe_token="omnish-ready-${BASHPID}-${RANDOM}-${RANDOM}"
+    local probe_response='' probe_line
+    if ! printf '%s' "$probe_token" > "$stage/$probe_file"; then
+        kill "$server_pid" 2>/dev/null || :
+        wait "$server_pid" 2>/dev/null || :
+        _transfer_err "cannot create HTTP readiness probe"
+        trap - INT TERM
+        [[ -n "$old_int_trap" ]] && eval "$old_int_trap"
+        [[ -n "$old_term_trap" ]] && eval "$old_term_trap"
+        return 1
+    fi
+
     for ((attempt=0; attempt<30; attempt++)); do
+        if (( interrupted )); then
+            break
+        fi
         if ! kill -0 "$server_pid" 2>/dev/null; then
             wait "$server_pid" 2>/dev/null || :
+            rm -f -- "$stage/$probe_file"
             _transfer_err "HTTP server exited before becoming ready"
             trap - INT TERM
             [[ -n "$old_int_trap" ]] && eval "$old_int_trap"
             [[ -n "$old_term_trap" ]] && eval "$old_term_trap"
             return 1
         fi
-        if ( exec 3<>"/dev/tcp/$ip/$port" ) 2>/dev/null; then
+        probe_response=''
+        if {
+            exec 3<>"/dev/tcp/$ip/$port"
+            printf 'GET /%s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n' "$probe_file" "$ip" >&3
+            while IFS= read -r -t 0.2 probe_line <&3; do
+                probe_response+="$probe_line"$'\n'
+                [[ "$probe_response" == *"$probe_token"* ]] && break
+            done
+            exec 3>&-
+            exec 3<&-
+        } 2>/dev/null && [[ "$probe_response" == *"$probe_token"* ]]; then
             ready=1
             break
         fi
         sleep 0.1
     done
+    rm -f -- "$stage/$probe_file"
+    if (( interrupted )); then
+        kill "$server_pid" 2>/dev/null || :
+        wait "$server_pid" 2>/dev/null || :
+        trap - INT TERM
+        [[ -n "$old_int_trap" ]] && eval "$old_int_trap"
+        [[ -n "$old_term_trap" ]] && eval "$old_term_trap"
+        return 0
+    fi
     if (( ! ready )); then
         kill "$server_pid" 2>/dev/null || :
         wait "$server_pid" 2>/dev/null || :
-        _transfer_err "HTTP server did not become ready"
+        _transfer_err "HTTP server did not serve its readiness probe"
         trap - INT TERM
         [[ -n "$old_int_trap" ]] && eval "$old_int_trap"
         [[ -n "$old_term_trap" ]] && eval "$old_term_trap"
