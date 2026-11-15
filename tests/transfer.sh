@@ -85,6 +85,7 @@ ln -s "$WORK/outside-sentinel.txt.missing" "$WORK/stage/dangling.txt"
 printf 'safe staged payload\\n' > "$WORK/dangling.txt"
 _transfer_stage_files "$WORK/stage" "$WORK/dangling.txt"
 [[ "$(cat "$WORK/outside-sentinel.txt")" == "outside sentinel" ]] || fail "staging modified a file outside its directory"
+[[ ! -e "$WORK/outside-sentinel.txt.missing" ]] || fail "staging followed a dangling symlink outside its directory"
 [[ "$(cat "$WORK/stage/1-dangling.txt")" == "safe staged payload" ]] || fail "dangling symlink collision was not safely renamed"
 if _transfer_stage_files "$WORK/stage" "$WORK/missing.txt"; then fail "missing file was accepted"; fi
 ln -s "$WORK/one.txt" "$WORK/link.txt"
