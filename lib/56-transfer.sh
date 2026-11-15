@@ -88,7 +88,9 @@ _transfer_stage_files() {
         base=$(basename -- "$src")
         dest="$stage/$base"
         while [[ -e "$dest" || -L "$dest" ]]; do dest="$stage/$n-$base"; ((n+=1)); done
-        if ln -- "$src" "$dest" 2>/dev/null; then :; else cp -- "$src" "$dest" || return 1; fi
+        # Copy into staging instead of hard-linking: the shared payload
+        # must remain independent if the original file changes during transfer.
+        cp -- "$src" "$dest" || return 1
     done
 }
 
