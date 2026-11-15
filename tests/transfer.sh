@@ -232,7 +232,7 @@ try:
     while time.monotonic() < deadline:
         try:
             with urllib.request.urlopen(url, timeout=0.3) as response:
-                if response.read() != b"http lifecycle payload\\n":
+                if response.read() != b"http lifecycle payload\n":
                     raise SystemExit("FAIL: Ctrl+C fixture served incorrect content")
             break
         except Exception:
