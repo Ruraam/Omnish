@@ -51,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           bash packaging/deb/build.sh 3.0.0 "$RUNNER_TEMP/omnish-deb"
-          dpkg-deb --info "$RUNNER_TEMP/omnish-deb/omnish_3.0.0_all.deb"
+          bash packaging/deb/test.sh "$RUNNER_TEMP/omnish-deb/omnish_3.0.0_all.deb"
       - name: Checkout ULPM packaging engine
         uses: actions/checkout@v4
         with:
