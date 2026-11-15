@@ -10,7 +10,7 @@ OUT_DIR="${2:-$ROOT/dist}"
     printf 'usage: %s VERSION [OUTPUT_DIR]\n' "$0" >&2
     exit 2
 }
-for command in dpkg-deb install cp grep; do
+for command in dpkg-deb install cp grep sed; do
     command -v "$command" >/dev/null 2>&1 || {
         printf 'error: required command not found: %s\n' "$command" >&2
         exit 1
