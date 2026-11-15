@@ -80,10 +80,20 @@ fi
 removed=0; failed=0
 
 if (( exists_bin )); then
-    rm -f "$BIN" 2>/dev/null && ((removed++)) || { echo "warn: cannot remove $BIN" >&2; ((failed++)); }
+    if rm -f -- "$BIN" 2>/dev/null; then
+        ((removed += 1))
+    else
+        echo "warn: cannot remove $BIN" >&2
+        ((failed += 1))
+    fi
 fi
 if (( exists_share )); then
-    rm -rf "$SHARE" 2>/dev/null && ((removed++)) || { echo "warn: cannot remove $SHARE" >&2; ((failed++)); }
+    if rm -rf -- "$SHARE" 2>/dev/null; then
+        ((removed += 1))
+    else
+        echo "warn: cannot remove $SHARE" >&2
+        ((failed += 1))
+    fi
 fi
 
 [[ -f "$CACHE/.omnish_d" ]] && rm -f "$CACHE/.omnish_d" 2>/dev/null
