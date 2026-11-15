@@ -1,0 +1,341 @@
+# omnish — Quick Transfer
+# Local HTTP sharing with optional croc / Magic Wormhole integrations.
+
+_transfer_err() {
+    printf 'omnish transfer: %s\n' "$*" 2>/dev/null >/dev/tty || printf 'omnish transfer: %s\n' "$*" >&2
+}
+
+_transfer_private_dir() {
+    local root="${TMP_OMNISH_DIR:-${TMPDIR:-/tmp}}"
+    mkdir -p -- "$root" 2>/dev/null || return 1
+    umask 077
+    mktemp -d "$root/omnish-transfer.XXXXXX"
+}
+
+_transfer_random_port() {
+    local min="${OMNISH_TRANSFER_PORT_MIN:-40000}" max="${OMNISH_TRANSFER_PORT_MAX:-49999}" span
+    [[ "$min" =~ ^[0-9]+$ && "$max" =~ ^[0-9]+$ ]] || return 2
+    (( min >= 1024 && max <= 65535 && min <= max )) || return 2
+    span=$((max - min + 1))
+    printf '%s\n' "$((min + (RANDOM * 32768 + RANDOM) % span))"
+}
+
+_transfer_local_ip() {
+    local ip='' route_ip='' route_dev='' dev='' cidr iface candidate
+    local -a candidates=()
+
+    _transfer_valid_ipv4() {
+        local value="$1" a b c d octet
+        [[ "$value" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
+        IFS=. read -r a b c d <<< "$value"
+        for octet in "$a" "$b" "$c" "$d"; do
+            (( 10#$octet <= 255 )) || return 1
+        done
+        return 0
+    }
+
+    _transfer_usable_iface() {
+        case "$1" in
+            lo|tun*|tap*|wg*|tailscale*|zt*|ppp*|nordlynx*|proton*|mullvad*|docker*|veth*|cni*|podman*|flannel*|kube*|virbr*|vmnet*|vboxnet*)
+                return 1 ;;
+        esac
+        return 0
+    }
+
+    if command -v ip >/dev/null 2>&1; then
+        read -r route_dev route_ip < <(ip -4 route get 1.1.1.1 2>/dev/null |
+            awk '{for(i=1;i<=NF;i++){if($i=="dev") d=$(i+1); if($i=="src") s=$(i+1)} if(d!="" && s!=""){print d, s; exit}}')
+
+        # Enumerate usable global addresses first. For same-LAN transfers,
+        # an RFC1918 address on Wi-Fi/Ethernet is usually more useful than a
+        # public address selected by the default route.
+        while read -r iface cidr; do
+            _transfer_usable_iface "$iface" || continue
+            candidate="${cidr%%/*}"
+            _transfer_valid_ipv4 "$candidate" || continue
+            [[ "$candidate" == 169.254.* ]] && continue
+            candidates+=("$candidate")
+        done < <(ip -o -4 addr show scope global 2>/dev/null |
+            awk '{print $2, $4}')
+
+        for ip in "${candidates[@]}"; do
+            if [[ "$ip" == 10.* || "$ip" == 192.168.* ||
+                  "$ip" =~ ^172\.(1[6-9]|2[0-9]|3[0-1])\. ]]; then
+                printf '%s\n' "$ip"
+                return 0
+            fi
+        done
+
+        if [[ -n "${route_dev:-}" ]] && _transfer_usable_iface "$route_dev" &&
+           _transfer_valid_ipv4 "${route_ip:-}"; then
+            printf '%s\n' "$route_ip"
+            return 0
+        fi
+        if (( ${#candidates[@]} > 0 )); then
+            printf '%s\n' "${candidates[0]}"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+_transfer_stage_files() {
+    local stage="$1" src base dest n=1
+    shift
+    (( $# > 0 )) || return 2
+    for src in "$@"; do
+        [[ -f "$src" && ! -L "$src" ]] || { _transfer_err "only regular files can be shared: $src"; return 1; }
+        base=$(basename -- "$src")
+        dest="$stage/$base"
+        while [[ -e "$dest" || -L "$dest" ]]; do dest="$stage/$n-$base"; ((n+=1)); done
+        # Copy into staging instead of hard-linking: the shared payload
+        # must remain independent if the original file changes during transfer.
+        cp -- "$src" "$dest" || return 1
+    done
+}
+
+_transfer_qr() {
+    local url="$1"
+    if command -v qrencode >/dev/null 2>&1; then qrencode -t ANSIUTF8 -m 1 "$url" </dev/tty >/dev/tty 2>&1 || :; fi
+    printf '\nOpen on your phone:\n%s\n' "$url" >/dev/tty 2>/dev/null || printf '\n%s\n' "$url"
+}
+
+_transfer_port_in_use() {
+    local ip="$1" port="$2"
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import socket,sys; s=socket.socket(); s.settimeout(0.5); rc=s.connect_ex((sys.argv[1], int(sys.argv[2]))); s.close(); sys.exit(0 if rc == 0 else 1)' "$ip" "$port" >/dev/null 2>&1
+    elif command -v nc >/dev/null 2>&1; then
+        nc -z -w 1 "$ip" "$port" >/dev/null 2>&1
+    else
+        ( exec 3<>"/dev/tcp/$ip/$port" ) 2>/dev/null
+    fi
+}
+
+_transfer_http_server() {
+    local stage="$1" port="$2" ip="$3" server_pid='' url
+    url="http://$ip:$port/"
+    local server_output=/dev/stderr old_int_trap old_term_trap
+    local server_rc=0 interrupted=0 ready=0 attempt
+
+    # Fail before spawning a server when another process already owns the
+    # requested TCP port. This is a preflight check; a concurrent bind can
+    # still win the small interval before our server starts.
+    if _transfer_port_in_use "$ip" "$port"; then
+        _transfer_err "TCP port $port is already in use on $ip"
+        return 1
+    fi
+    # The caller's outer cleanup trap remains active during the preflight.
+    # If it caught a signal here, do not start a listener afterwards.
+    if (( ${transfer_interrupted:-0} )); then
+        return "${transfer_signal_status:-1}"
+    fi
+
+    # Install signal handling before starting the listener. Otherwise a client
+    # can connect during startup and terminate us before the cleanup trap exists.
+    old_int_trap=$(trap -p INT || :)
+    old_term_trap=$(trap -p TERM || :)
+    trap 'interrupted=1; transfer_interrupted=1; transfer_signal_status=130; if [[ -n "$server_pid" ]]; then kill "$server_pid" 2>/dev/null || :; wait "$server_pid" 2>/dev/null || :; fi' INT
+    trap 'interrupted=1; transfer_interrupted=1; transfer_signal_status=143; if [[ -n "$server_pid" ]]; then kill "$server_pid" 2>/dev/null || :; wait "$server_pid" 2>/dev/null || :; fi' TERM
+
+    if command -v python3 >/dev/null 2>&1; then
+        if ( : >/dev/tty ) 2>/dev/null; then server_output=/dev/tty; fi
+        (cd -- "$stage" && exec python3 -m http.server "$port" --bind "$ip") >"$server_output" 2>&1 &
+        server_pid=$!
+    elif command -v busybox >/dev/null 2>&1; then
+        if ( : >/dev/tty ) 2>/dev/null; then server_output=/dev/tty; fi
+        (cd -- "$stage" && exec busybox httpd -f -p "$ip:$port" -h "$stage") >"$server_output" 2>&1 &
+        server_pid=$!
+    else
+        _transfer_err "python3 or busybox is required for local HTTP sharing"
+        trap - INT TERM
+        [[ -n "$old_int_trap" ]] && eval "$old_int_trap"
+        [[ -n "$old_term_trap" ]] && eval "$old_term_trap"
+        return 127
+    fi
+
+    if (( interrupted )); then
+        kill "$server_pid" 2>/dev/null || :
+        wait "$server_pid" 2>/dev/null || :
+        trap - INT TERM
+        [[ -n "$old_int_trap" ]] && eval "$old_int_trap"
+        [[ -n "$old_term_trap" ]] && eval "$old_term_trap"
+        return 0
+    fi
+
+    # Probe for a file containing a per-invocation token. A TCP connect
+    # alone is insufficient: another process may win the bind race after the
+    # preflight check and make us advertise someone else's listener.
+    local probe_file=".omnish-ready-${BASHPID}-${RANDOM}-${RANDOM}"
+    local probe_token="omnish-ready-${BASHPID}-${RANDOM}-${RANDOM}"
+    local probe_response='' probe_line
+    if ! printf '%s' "$probe_token" > "$stage/$probe_file"; then
+        kill "$server_pid" 2>/dev/null || :
+        wait "$server_pid" 2>/dev/null || :
+        _transfer_err "cannot create HTTP readiness probe"
+        trap - INT TERM
+        [[ -n "$old_int_trap" ]] && eval "$old_int_trap"
+        [[ -n "$old_term_trap" ]] && eval "$old_term_trap"
+        return 1
+    fi
+
+    for ((attempt=0; attempt<30; attempt++)); do
+        if (( interrupted )); then
+            break
+        fi
+        if ! kill -0 "$server_pid" 2>/dev/null; then
+            wait "$server_pid" 2>/dev/null || :
+            rm -f -- "$stage/$probe_file"
+            _transfer_err "HTTP server exited before becoming ready"
+            trap - INT TERM
+            [[ -n "$old_int_trap" ]] && eval "$old_int_trap"
+            [[ -n "$old_term_trap" ]] && eval "$old_term_trap"
+            return 1
+        fi
+        probe_response=''
+        if {
+            exec 3<>"/dev/tcp/$ip/$port"
+            printf 'GET /%s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n' "$probe_file" "$ip" >&3
+            while IFS= read -r -t 0.2 probe_line <&3; do
+                probe_response+="$probe_line"$'\n'
+                [[ "$probe_response" == *"$probe_token"* ]] && break
+            done
+            exec 3>&-
+            exec 3<&-
+        } 2>/dev/null && [[ "$probe_response" == *"$probe_token"* ]]; then
+            ready=1
+            break
+        fi
+        sleep 0.1
+    done
+    rm -f -- "$stage/$probe_file"
+    if (( interrupted )); then
+        kill "$server_pid" 2>/dev/null || :
+        wait "$server_pid" 2>/dev/null || :
+        trap - INT TERM
+        [[ -n "$old_int_trap" ]] && eval "$old_int_trap"
+        [[ -n "$old_term_trap" ]] && eval "$old_term_trap"
+        return 0
+    fi
+    if (( ! ready )); then
+        kill "$server_pid" 2>/dev/null || :
+        wait "$server_pid" 2>/dev/null || :
+        _transfer_err "HTTP server did not serve its readiness probe"
+        trap - INT TERM
+        [[ -n "$old_int_trap" ]] && eval "$old_int_trap"
+        [[ -n "$old_term_trap" ]] && eval "$old_term_trap"
+        return 1
+    fi
+
+    clear </dev/tty 2>/dev/null || :
+    printf 'Quick Transfer — local HTTP\n\n' >/dev/tty 2>/dev/null || :
+    _transfer_qr "$url"
+    printf '\nServer is running. Press Ctrl+C to stop sharing.\n' >/dev/tty 2>/dev/null || :
+
+    # Preserve signal handlers installed by the caller; restore them after
+    # reaping the child so Quick Transfer does not alter the parent shell.
+    if (( interrupted )); then
+        kill "$server_pid" 2>/dev/null || :
+        wait "$server_pid" 2>/dev/null || :
+        trap - INT TERM
+        [[ -n "$old_int_trap" ]] && eval "$old_int_trap"
+        [[ -n "$old_term_trap" ]] && eval "$old_term_trap"
+        return 0
+    fi
+
+    if wait "$server_pid"; then
+        server_rc=0
+    else
+        server_rc=$?
+    fi
+
+    if (( interrupted )); then
+        kill "$server_pid" 2>/dev/null || :
+        wait "$server_pid" 2>/dev/null || :
+        server_rc=0
+    fi
+
+    trap - INT TERM
+    [[ -n "$old_int_trap" ]] && eval "$old_int_trap"
+    [[ -n "$old_term_trap" ]] && eval "$old_term_trap"
+    return "$server_rc"
+}
+_transfer_http() {
+    local -a files=("$@")
+    local stage='' ip='' port='' rc=0
+    local transfer_interrupted=0 transfer_signal_status=0
+    local old_int_trap old_term_trap
+
+    # Protect staging from the moment it is created, not only once the HTTP
+    # listener starts. The server helper temporarily installs its own traps
+    # and restores these caller-level handlers when it returns.
+    old_int_trap=$(trap -p INT || :)
+    old_term_trap=$(trap -p TERM || :)
+    trap 'transfer_interrupted=1; transfer_signal_status=130' INT
+    trap 'transfer_interrupted=1; transfer_signal_status=143' TERM
+
+    stage=$(_transfer_private_dir) || {
+        _transfer_err "cannot create private staging directory"
+        rc=1
+    }
+
+    if (( ! transfer_interrupted && rc == 0 )); then
+        _transfer_stage_files "$stage" "${files[@]}" || rc=$?
+    fi
+    if (( ! transfer_interrupted && rc == 0 )); then
+        ip=$(_transfer_local_ip) || {
+            _transfer_err "cannot determine a LAN IPv4 address"
+            rc=1
+        }
+    fi
+    if (( ! transfer_interrupted && rc == 0 )); then
+        port=$(_transfer_random_port) || {
+            _transfer_err "invalid transfer port range"
+            rc=1
+        }
+    fi
+    if (( ! transfer_interrupted && rc == 0 )); then
+        if _transfer_http_server "$stage" "$port" "$ip"; then
+            rc=0
+        else
+            rc=$?
+        fi
+    fi
+
+    (( ! transfer_interrupted )) || rc=$transfer_signal_status
+    [[ -z "$stage" ]] || rm -rf -- "$stage"
+
+    trap - INT TERM
+    [[ -n "$old_int_trap" ]] && eval "$old_int_trap"
+    [[ -n "$old_term_trap" ]] && eval "$old_term_trap"
+    return "$rc"
+}
+
+_transfer_croc() {
+    local code
+    code=$(printf '%04x%04x%04x%04x' "$RANDOM" "$RANDOM" "$RANDOM" "$RANDOM")
+    printf 'croc transfer code: %s\n' "$code" 2>/dev/null >/dev/tty || :
+    CROC_SECRET="$code" croc send "$@"
+}
+
+_transfer_wormhole() { wormhole send "$@"; }
+
+quick_transfer() {
+    local selected="${1:-}"
+    local -a files=()
+    local choice
+    if (( ${#marked_files[@]} > 0 )); then files=("${marked_files[@]}"); elif [[ -n "$selected" && -f "$selected" ]]; then files=("$selected"); else
+        _transfer_err "mark one or more regular files, or select a file first"; return 1
+    fi
+    choice=$(_omnish_select "Send ${#files[@]} file(s)" < <(
+        printf '%s\n' "Local HTTP (zero-dependency)"
+        command -v croc >/dev/null 2>&1 && printf '%s\n' "croc (encrypted)"
+        command -v wormhole >/dev/null 2>&1 && printf '%s\n' "Magic Wormhole"
+        printf '%s\n' "Cancel"
+    )) || return 0
+    case "$choice" in
+        "Local HTTP (zero-dependency)") _transfer_http "${files[@]}" ;;
+        "croc (encrypted)") _transfer_croc "${files[@]}" ;;
+        "Magic Wormhole") _transfer_wormhole "${files[@]}" ;;
+        *) return 0 ;;
+    esac
+}

@@ -138,6 +138,7 @@ case "${1:-}" in
     --show-help)         shift; dialog_help ;;
     --archive-create)    quick_archive ;;
     --archive-open)      shift; [[ $# -ge 1 ]] || { echo "error: --archive-open requires PATH" >&2; exit 2; }; archive_browse "$1" ;;
+    --send)              shift; quick_transfer "${1:-}" ;;
     --scratchpad)        shift; scratchpad_open "${1:-}" </dev/tty >/dev/tty 2>&1 ;;
     --preview-file)      shift; [[ $# -ge 1 ]] || { echo "error: --preview-file requires PATH" >&2; exit 2; }; _preview_file "$1" ;;
     --dua)               shift; _dua_interactive "${1:-$PWD}" ;;
