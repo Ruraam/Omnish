@@ -164,6 +164,22 @@ cd Omnish
 ./install.sh
 ```
 
+### Debian / Ubuntu / Termux
+
+Via **[Debup](https://github.com/Uraam/debup)**
+
+Install and update Uraam via APT or Github Releases. 
+
+install Debup via interactive menu:
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ruraam/debup/main/installer.sh | bash
+```
+Search Uraam (on APT repo and Github Release)
+```bash
+dbp -s Ruraam/Omnish
+```
+Select option 1 for install directly from Github Releases page.
+
 Default locations:
 
 | Component | Location |
